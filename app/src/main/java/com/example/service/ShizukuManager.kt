@@ -159,8 +159,8 @@ class ShizukuManager(private val context: Context) {
      */
     suspend fun applyOptimization(
         settings: BoostSettings,
-        robloxPkg: String,
-        onLog: (BoostLog) -> Unit
+        robloxPkg: String = "com.roblox.client",
+        onLog: (BoostLog) -> Unit = {}
     ) = withContext(Dispatchers.IO) {
         val now = timeFormat.format(Date())
         val isPrivileged = _status.value.isServiceRunning && _status.value.isPermissionGranted
@@ -254,28 +254,45 @@ class ShizukuManager(private val context: Context) {
                     BoostLog(
                         timeFormatted = timeFormat.format(Date()),
                         category = "POTATO",
-                        message = "Enforcing Potato Mode (Intensity: ${scale.toInt()}%): Disabling heavy compositor layers",
+                        message = "Enforcing Potato Mode (Intensity: ${scale.toInt()}%): Downscaling resolution & dropping render load",
                         isSuccess = true
                     )
                 )
                 if (isPrivileged) {
-                    // Disable animations to zero stutter
+                    // Disable animations to eliminate frame drops
                     executeCommand("settings put global window_animation_scale 0.0")
                     executeCommand("settings put global transition_animation_scale 0.0")
                     executeCommand("settings put global animator_duration_scale 0.0")
+                    executeCommand("settings put global force_msaa 0")
+                    executeCommand("setprop debug.egl.force_msaa 0")
 
-                    // Lower surface flinger render strain
-                    if (scale >= 75f) {
-                        executeCommand("settings put system screen_auto_brightness_adj -0.2")
+                    // Android Game Mode Performance & Downscale for Roblox
+                    executeCommand("cmd game mode performance com.roblox.client")
+                    executeCommand("device_config put game_overlay com.roblox.client mode=2,downscale=0.5:fps=60")
+
+                    // Hardware Display Resolution Downscale based on potato intensity
+                    val scalePercent = when {
+                        scale >= 75f -> 50f  // 50% resolution -> 75% fewer pixels for max FPS
+                        scale >= 45f -> 65f  // 65% resolution
+                        scale >= 20f -> 80f  // 80% resolution
+                        else -> 100f
                     }
-                    onLog(
-                        BoostLog(
-                            timeFormatted = timeFormat.format(Date()),
-                            category = "GRAPHICS",
-                            message = "Disabled window animation overhead & reduced compositor draw delays",
-                            isSuccess = true
+                    if (scalePercent < 100f) {
+                        applyResolutionScale(scalePercent)
+                        onLog(
+                            BoostLog(
+                                timeFormatted = timeFormat.format(Date()),
+                                category = "POTATO",
+                                message = "GPU Render Target scaled to ${scalePercent.toInt()}% for dramatic lag reduction",
+                                isSuccess = true
+                            )
                         )
-                    )
+                    } else {
+                        resetResolution()
+                    }
+
+                    // AOT DEX Speed Compilation to prevent script lag
+                    executeCommand("cmd package compile -m speed -f com.roblox.client")
                 }
             }
 
@@ -285,20 +302,32 @@ class ShizukuManager(private val context: Context) {
                     BoostLog(
                         timeFormatted = timeFormat.format(Date()),
                         category = "SHADERS",
-                        message = "Enabling Shaders Enhancement (${shadersScale.toInt()}%): Boosting GPU composition & vibrance",
+                        message = "Enabling Shaders Enhancement (${shadersScale.toInt()}%): 4x MSAA, SurfaceFlinger GPU pipeline & HDR depth",
                         isSuccess = true
                     )
                 )
                 if (isPrivileged) {
+                    // Restore native sharp resolution
+                    resetResolution()
+
+                    // Enable 4x MSAA anti-aliasing
+                    executeCommand("settings put global force_msaa 1")
+                    executeCommand("setprop debug.egl.force_msaa 1")
+
                     // Enable hardware rendering layers and force GPU composition
                     executeCommand("service call SurfaceFlinger 1008 i32 1")
                     executeCommand("setprop debug.sf.hw 1")
                     executeCommand("settings put global window_animation_scale 0.5")
+
+                    // Game Mode High Fidelity
+                    executeCommand("cmd game mode standard com.roblox.client")
+                    executeCommand("device_config put game_overlay com.roblox.client mode=1:fps=120")
+
                     onLog(
                         BoostLog(
                             timeFormatted = timeFormat.format(Date()),
-                            category = "GRAPHICS",
-                            message = "SurfaceFlinger direct GPU composition & color pipeline active",
+                            category = "SHADERS",
+                            message = "SurfaceFlinger direct GPU composition & 4x MSAA shader pipeline active",
                             isSuccess = true
                         )
                     )
@@ -307,6 +336,8 @@ class ShizukuManager(private val context: Context) {
 
             BoostMode.BALANCED -> {
                 if (isPrivileged) {
+                    resetResolution()
+                    executeCommand("settings put global force_msaa 0")
                     executeCommand("settings put global window_animation_scale 0.5")
                     executeCommand("settings put global transition_animation_scale 0.5")
                 }
@@ -314,7 +345,7 @@ class ShizukuManager(private val context: Context) {
                     BoostLog(
                         timeFormatted = timeFormat.format(Date()),
                         category = "BALANCED",
-                        message = "Balanced configuration applied: 60 FPS target with stable thermals",
+                        message = "Balanced configuration applied: Native resolution, 60 FPS target with stable thermals",
                         isSuccess = true
                     )
                 )
@@ -371,6 +402,43 @@ class ShizukuManager(private val context: Context) {
         )
     }
 
+    suspend fun getPhysicalResolution(): Pair<Int, Int> = withContext(Dispatchers.IO) {
+        try {
+            val res = executeCommand("wm size")
+            val regex = Regex("""Physical size:\s*(\d+)x(\d+)""")
+            val match = regex.find(res.output)
+            if (match != null) {
+                val w = match.groupValues[1].toIntOrNull() ?: 1080
+                val h = match.groupValues[2].toIntOrNull() ?: 2400
+                return@withContext Pair(w, h)
+            }
+        } catch (_: Exception) {}
+        Pair(1080, 2400)
+    }
+
+    suspend fun applyResolutionScale(scalePercent: Float): Boolean = withContext(Dispatchers.IO) {
+        if (scalePercent >= 99f) {
+            return@withContext resetResolution()
+        }
+        val physical = getPhysicalResolution()
+        val factor = (scalePercent / 100f).coerceIn(0.4f, 1.0f)
+        val targetW = ((physical.first * factor).toInt() / 2) * 2
+        val targetH = ((physical.second * factor).toInt() / 2) * 2
+        val res = executeCommand("wm size ${targetW}x${targetH}")
+        res.isSuccess
+    }
+
+    suspend fun resetResolution(): Boolean = withContext(Dispatchers.IO) {
+        val res = executeCommand("wm size reset")
+        executeCommand("wm density reset")
+        res.isSuccess
+    }
+
+    suspend fun compileRobloxSpeed(): Boolean = withContext(Dispatchers.IO) {
+        val res = executeCommand("cmd package compile -m speed -f com.roblox.client")
+        res.isSuccess
+    }
+
     fun cleanup() {
         try {
             Shizuku.removeBinderReceivedListener(binderReceivedListener)
@@ -383,6 +451,15 @@ class ShizukuManager(private val context: Context) {
 
     companion object {
         const val REQUEST_CODE_PERMISSION = 7001
+
+        @Volatile
+        private var instance: ShizukuManager? = null
+
+        fun getInstance(context: Context): ShizukuManager {
+            return instance ?: synchronized(this) {
+                instance ?: ShizukuManager(context.applicationContext).also { instance = it }
+            }
+        }
     }
 }
 

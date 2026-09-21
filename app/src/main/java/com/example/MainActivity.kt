@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.sp
 import com.example.ui.components.BoostCenterCard
 import com.example.ui.components.HeaderBar
 import com.example.ui.components.LogTerminalCard
+import com.example.ui.components.OverlayLauncherCard
 import com.example.ui.components.ShizukuSetupDialog
 import com.example.ui.components.SideTuningMenu
 import com.example.ui.components.TelemetryOverview
@@ -102,6 +103,9 @@ fun BoosterApp(
     val isSideMenuOpen by viewModel.isSideMenuOpen.collectAsState()
     val logs by viewModel.boostLogs.collectAsState()
     val showShizukuHelp by viewModel.showShizukuHelp.collectAsState()
+    val isOverlayActive by viewModel.isOverlayActive.collectAsState()
+    val liveFps by viewModel.liveFps.collectAsState()
+    val frameTimeMs by viewModel.frameTimeMs.collectAsState()
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -145,8 +149,29 @@ fun BoosterApp(
                     boostProgress = boostProgress,
                     boostStepText = boostStepText,
                     onBoostClick = { viewModel.boostRoblox() },
-                    onLaunchRoblox = { viewModel.launchRoblox(context) },
+                    onLaunchRoblox = { viewModel.launchRobloxWithOverlay(context) },
                     onOpenSideMenu = { viewModel.toggleSideMenu(true) }
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // In-Game Floating HUD & Menu Over Roblox Card
+                OverlayLauncherCard(
+                    isOverlayActive = isOverlayActive,
+                    liveFps = liveFps,
+                    frameTimeMs = frameTimeMs,
+                    onToggleOverlay = { enabled ->
+                        viewModel.toggleOverlay(context, enabled)
+                    },
+                    onLaunchRobloxWithOverlay = {
+                        viewModel.launchRobloxWithOverlay(context)
+                    },
+                    onCompileSpeed = {
+                        viewModel.compileRobloxSpeed(context)
+                    },
+                    onResetResolution = {
+                        viewModel.resetResolution(context)
+                    }
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
