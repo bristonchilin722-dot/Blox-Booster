@@ -62,10 +62,21 @@ class FloatingOverlayService : Service() {
     private val settingsFlow = MutableStateFlow(BoostSettings())
     private val isMenuExpanded = MutableStateFlow(false)
 
+    private var pillX = 40
+    private var pillY = 160
+
     private lateinit var pillParams: WindowManager.LayoutParams
     private lateinit var fullscreenParams: WindowManager.LayoutParams
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_STOP_OVERLAY) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        return START_STICKY
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -103,11 +114,22 @@ class FloatingOverlayService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
+        val stopIntent = Intent(this, FloatingOverlayService::class.java).apply {
+            action = ACTION_STOP_OVERLAY
+        }
+        val stopPendingIntent = PendingIntent.getService(
+            this,
+            1,
+            stopIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
         val notification: Notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle("Blox Booster HUD • Made by Briston")
-            .setContentText("FPS counter and tuning menu active over Roblox")
+            .setContentText("FPS counter active over Roblox • Tap to open controls")
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentIntent(pendingIntent)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Close Overlay", stopPendingIntent)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
@@ -125,16 +147,33 @@ class FloatingOverlayService : Service() {
             WindowManager.LayoutParams.TYPE_PHONE
         }
 
-        // Fullscreen params used when side menu is open or pill is rendered
+        // Pill Layout: ONLY occupies the small HUD size, allowing full touch passthrough everywhere else!
+        pillParams = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            overlayType,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = pillX
+            y = pillY
+        }
+
+        // Fullscreen params: ONLY used when the side tuning drawer is actually open
         fullscreenParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
             overlayType,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
+            x = 0
+            y = 0
         }
 
         val composeView = ComposeView(this).apply {
@@ -149,106 +188,95 @@ class FloatingOverlayService : Service() {
                     val settings by settingsFlow.collectAsState()
                     val expanded by isMenuExpanded.collectAsState()
 
-                    var pillOffsetX by remember { mutableStateOf(40f) }
-                    var pillOffsetY by remember { mutableStateOf(160f) }
-
-                    // Root Box
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        // Fullscreen Shader Visual Filter over Roblox if Shaders mode is active!
-                        if (settings.activeMode == BoostMode.SHADERS && settings.shadersIntensity > 15f) {
-                            val tintAlpha = (settings.shadersIntensity / 100f * 0.12f).coerceIn(0.02f, 0.15f)
+                    if (!expanded) {
+                        // In collapsed mode: ComposeView is WRAP_CONTENT, perfectly matching pill size!
+                        // Touches anywhere else on the screen pass directly to Roblox & the phone OS!
+                        FloatingPillHud(
+                            fps = fps,
+                            frameTimeMs = frameTimeMs,
+                            settings = settings,
+                            isExpanded = false,
+                            onToggleExpand = { setOverlayExpanded(true) },
+                            onCloseCompletely = { stopSelf() },
+                            onDrag = { dx, dy ->
+                                pillX = (pillX + dx.toInt()).coerceIn(0, 1400)
+                                pillY = (pillY + dy.toInt()).coerceIn(30, 2600)
+                                pillParams.x = pillX
+                                pillParams.y = pillY
+                                try {
+                                    windowManager?.updateViewLayout(this@apply, pillParams)
+                                } catch (_: Throwable) {}
+                            }
+                        )
+                    } else {
+                        // Expanded mode: side drawer with backdrop dim
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            // Backdrop dim when side menu is open
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .background(Color(0xFF330066).copy(alpha = tintAlpha))
-                            )
-                        }
-
-                        // Backdrop dim when side menu is open
-                        if (expanded) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(Color.Black.copy(alpha = 0.5f))
+                                    .background(Color.Black.copy(alpha = 0.55f))
                                     .clickable(
                                         indication = null,
                                         interactionSource = remember { MutableInteractionSource() }
-                                    ) { isMenuExpanded.value = false }
+                                    ) { setOverlayExpanded(false) }
                             )
-                        }
 
-                        // Draggable Floating Pill (only shown when menu is collapsed)
-                        if (!expanded) {
-                            FloatingPillHud(
-                                fps = fps,
-                                frameTimeMs = frameTimeMs,
-                                settings = settings,
-                                isExpanded = expanded,
-                                onToggleExpand = { isMenuExpanded.value = true },
-                                onDrag = { dx, dy ->
-                                    pillOffsetX = (pillOffsetX + dx).coerceIn(10f, 600f)
-                                    pillOffsetY = (pillOffsetY + dy).coerceIn(60f, 1800f)
-                                },
-                                modifier = Modifier.padding(
-                                    start = pillOffsetX.dp,
-                                    top = pillOffsetY.dp
+                            // Floating Side Game Menu over Roblox
+                            AnimatedVisibility(
+                                visible = true,
+                                enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(),
+                                exit = slideOutHorizontally(targetOffsetX = { it }) + fadeOut(),
+                                modifier = Modifier.align(Alignment.CenterEnd)
+                            ) {
+                                FloatingSideGameMenu(
+                                    fps = fps,
+                                    frameTimeMs = frameTimeMs,
+                                    settings = settings,
+                                    onClose = { setOverlayExpanded(false) },
+                                    onCloseCompletely = { stopSelf() },
+                                    onModeSelect = { mode ->
+                                        val updated = settings.copy(activeMode = mode)
+                                        settingsFlow.value = updated
+                                        applyModeSettings(updated)
+                                    },
+                                    onFpsCapSelect = { cap ->
+                                        val updated = settings.copy(fpsCap = cap)
+                                        settingsFlow.value = updated
+                                        applyFpsCap(cap)
+                                    },
+                                    onBoostIntensityChange = { boost ->
+                                        settingsFlow.value = settings.copy(boostIntensity = boost)
+                                    },
+                                    onPotatoIntensityChange = { potato ->
+                                        val updated = settings.copy(potatoIntensity = potato)
+                                        settingsFlow.value = updated
+                                        if (updated.activeMode == BoostMode.POTATO) {
+                                            applyPotatoScale(potato)
+                                        }
+                                    },
+                                    onShadersIntensityChange = { shaders ->
+                                        settingsFlow.value = settings.copy(shadersIntensity = shaders)
+                                    },
+                                    onInstantBoost = {
+                                        serviceScope.launch {
+                                            ShizukuManager.getInstance(applicationContext).applyOptimization(
+                                                settings = settingsFlow.value
+                                            )
+                                        }
+                                    },
+                                    onSpeedCompile = {
+                                        serviceScope.launch {
+                                            ShizukuManager.getInstance(applicationContext).compileRobloxSpeed()
+                                        }
+                                    },
+                                    onResetResolution = {
+                                        serviceScope.launch {
+                                            ShizukuManager.getInstance(applicationContext).resetResolution()
+                                        }
+                                    }
                                 )
-                            )
-                        }
-
-                        // Floating Side Game Menu over Roblox
-                        AnimatedVisibility(
-                            visible = expanded,
-                            enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(),
-                            exit = slideOutHorizontally(targetOffsetX = { it }) + fadeOut(),
-                            modifier = Modifier.align(Alignment.CenterEnd)
-                        ) {
-                            FloatingSideGameMenu(
-                                fps = fps,
-                                frameTimeMs = frameTimeMs,
-                                settings = settings,
-                                onClose = { isMenuExpanded.value = false },
-                                onModeSelect = { mode ->
-                                    val updated = settings.copy(activeMode = mode)
-                                    settingsFlow.value = updated
-                                    applyModeSettings(updated)
-                                },
-                                onFpsCapSelect = { cap ->
-                                    val updated = settings.copy(fpsCap = cap)
-                                    settingsFlow.value = updated
-                                    applyFpsCap(cap)
-                                },
-                                onBoostIntensityChange = { boost ->
-                                    settingsFlow.value = settings.copy(boostIntensity = boost)
-                                },
-                                onPotatoIntensityChange = { potato ->
-                                    val updated = settings.copy(potatoIntensity = potato)
-                                    settingsFlow.value = updated
-                                    if (updated.activeMode == BoostMode.POTATO) {
-                                        applyPotatoScale(potato)
-                                    }
-                                },
-                                onShadersIntensityChange = { shaders ->
-                                    settingsFlow.value = settings.copy(shadersIntensity = shaders)
-                                },
-                                onInstantBoost = {
-                                    serviceScope.launch {
-                                        ShizukuManager.getInstance(applicationContext).applyOptimization(
-                                            settings = settingsFlow.value
-                                        )
-                                    }
-                                },
-                                onSpeedCompile = {
-                                    serviceScope.launch {
-                                        ShizukuManager.getInstance(applicationContext).compileRobloxSpeed()
-                                    }
-                                },
-                                onResetResolution = {
-                                    serviceScope.launch {
-                                        ShizukuManager.getInstance(applicationContext).resetResolution()
-                                    }
-                                }
-                            )
+                            }
                         }
                     }
                 }
@@ -256,7 +284,26 @@ class FloatingOverlayService : Service() {
         }
 
         overlayView = composeView
-        windowManager?.addView(composeView, fullscreenParams)
+        try {
+            windowManager?.addView(composeView, pillParams)
+        } catch (e: Throwable) {
+            // Handled
+        }
+    }
+
+    private fun setOverlayExpanded(isExpanded: Boolean) {
+        isMenuExpanded.value = isExpanded
+        val view = overlayView ?: return
+        val wm = windowManager ?: return
+        try {
+            if (isExpanded) {
+                wm.updateViewLayout(view, fullscreenParams)
+            } else {
+                pillParams.x = pillX
+                pillParams.y = pillY
+                wm.updateViewLayout(view, pillParams)
+            }
+        } catch (_: Throwable) {}
     }
 
     private fun applyModeSettings(settings: BoostSettings) {
@@ -331,7 +378,9 @@ class FloatingOverlayService : Service() {
         lifecycleOwner.onDestroy()
 
         overlayView?.let {
-            windowManager?.removeView(it)
+            try {
+                windowManager?.removeView(it)
+            } catch (_: Throwable) {}
         }
         overlayView = null
 
@@ -342,6 +391,7 @@ class FloatingOverlayService : Service() {
     }
 
     companion object {
+        const val ACTION_STOP_OVERLAY = "com.example.service.ACTION_STOP_OVERLAY"
         private const val NOTIFICATION_ID = 8801
 
         fun start(context: Context) {

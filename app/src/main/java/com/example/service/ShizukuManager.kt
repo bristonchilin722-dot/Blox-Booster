@@ -18,12 +18,32 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+
 class ShizukuManager(private val context: Context) {
 
     private val _status = MutableStateFlow(ShizukuStatus())
     val status: StateFlow<ShizukuStatus> = _status.asStateFlow()
 
     private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+
+    private var cachedRootAvailable: Boolean? = null
+
+    fun isRootAvailable(): Boolean {
+        cachedRootAvailable?.let { return it }
+        val available = try {
+            val p = Runtime.getRuntime().exec(arrayOf("which", "su"))
+            p.waitFor() == 0
+        } catch (_: Throwable) {
+            false
+        }
+        cachedRootAvailable = available
+        return available
+    }
+
+    val isPrivileged: Boolean
+        get() = (_status.value.isServiceRunning && _status.value.isPermissionGranted) || isRootAvailable()
 
     private val binderReceivedListener = Shizuku.OnBinderReceivedListener {
         checkStatus()
@@ -46,11 +66,15 @@ class ShizukuManager(private val context: Context) {
             Shizuku.addBinderDeadListener(binderDeadListener)
             Shizuku.addRequestPermissionResultListener(permissionResultListener)
             checkStatus()
+            // Reset any previous resolution distortion immediately on startup
+            CoroutineScope(Dispatchers.IO).launch {
+                resetResolution()
+            }
         } catch (e: Throwable) {
             _status.value = ShizukuStatus(
-                isServiceRunning = false,
-                isPermissionGranted = false,
-                statusMessage = "Shizuku not initialized: ${e.message}"
+                isServiceRunning = isRootAvailable(),
+                isPermissionGranted = isRootAvailable(),
+                statusMessage = if (isRootAvailable()) "Root (su) Active" else "Privileges not active: ${e.message}"
             )
         }
     }
@@ -59,10 +83,11 @@ class ShizukuManager(private val context: Context) {
         try {
             val ping = Shizuku.pingBinder()
             if (!ping) {
+                val hasRoot = isRootAvailable()
                 _status.value = ShizukuStatus(
-                    isServiceRunning = false,
-                    isPermissionGranted = false,
-                    statusMessage = "Shizuku service is not running"
+                    isServiceRunning = hasRoot,
+                    isPermissionGranted = hasRoot,
+                    statusMessage = if (hasRoot) "Root (su) Privileged Active" else "Shizuku not running (Start Shizuku app for ADB mode)"
                 )
                 return
             }
@@ -81,13 +106,14 @@ class ShizukuManager(private val context: Context) {
                 isPermissionGranted = granted,
                 version = version,
                 uid = uid,
-                statusMessage = if (granted) "Shizuku Active (Privileged v$version)" else "Permission Required"
+                statusMessage = if (granted) "Shizuku Active (Privileged v$version)" else "Shizuku Permission Required"
             )
         } catch (e: Throwable) {
+            val hasRoot = isRootAvailable()
             _status.value = ShizukuStatus(
-                isServiceRunning = false,
-                isPermissionGranted = false,
-                statusMessage = "Error connecting: ${e.localizedMessage ?: "Unknown"}"
+                isServiceRunning = hasRoot,
+                isPermissionGranted = hasRoot,
+                statusMessage = if (hasRoot) "Root (su) Active" else "Shizuku offline: ${e.localizedMessage ?: "Unknown"}"
             )
         }
     }
@@ -103,27 +129,35 @@ class ShizukuManager(private val context: Context) {
     }
 
     suspend fun executeCommand(command: String): CommandResult = withContext(Dispatchers.IO) {
-        if (!_status.value.isServiceRunning || !_status.value.isPermissionGranted) {
-            return@withContext CommandResult(
-                command = command,
-                exitCode = -1,
-                output = "Shizuku privileges not active, using platform fallback",
-                isSuccess = false
-            )
-        }
+        val hasShizuku = _status.value.isServiceRunning && _status.value.isPermissionGranted
+        val hasRoot = isRootAvailable()
 
         try {
-            val process: Process = try {
-                val method = Shizuku::class.java.getDeclaredMethod(
-                    "newProcess",
-                    Array<String>::class.java,
-                    Array<String>::class.java,
-                    String::class.java
-                )
-                method.isAccessible = true
-                method.invoke(null, arrayOf("sh", "-c", command), null, null) as Process
-            } catch (_: Throwable) {
-                Runtime.getRuntime().exec(arrayOf("sh", "-c", command))
+            val process: Process = when {
+                hasShizuku -> {
+                    try {
+                        val method = Shizuku::class.java.getDeclaredMethod(
+                            "newProcess",
+                            Array<String>::class.java,
+                            Array<String>::class.java,
+                            String::class.java
+                        )
+                        method.isAccessible = true
+                        method.invoke(null, arrayOf("sh", "-c", command), null, null) as Process
+                    } catch (_: Throwable) {
+                        if (hasRoot) {
+                            Runtime.getRuntime().exec(arrayOf("su", "-c", command))
+                        } else {
+                            Runtime.getRuntime().exec(arrayOf("sh", "-c", command))
+                        }
+                    }
+                }
+                hasRoot -> {
+                    Runtime.getRuntime().exec(arrayOf("su", "-c", command))
+                }
+                else -> {
+                    Runtime.getRuntime().exec(arrayOf("sh", "-c", command))
+                }
             }
             val reader = BufferedReader(InputStreamReader(process.inputStream))
             val errorReader = BufferedReader(InputStreamReader(process.errorStream))
@@ -148,7 +182,7 @@ class ShizukuManager(private val context: Context) {
             CommandResult(
                 command = command,
                 exitCode = -1,
-                output = "Execution failed: ${e.message}",
+                output = "Execution error: ${e.message}",
                 isSuccess = false
             )
         }
@@ -417,21 +451,24 @@ class ShizukuManager(private val context: Context) {
     }
 
     suspend fun applyResolutionScale(scalePercent: Float): Boolean = withContext(Dispatchers.IO) {
+        // SAFETY FIRST: NEVER use "wm size" - wm size forces a global screen scale that zooms in the entire Android OS
+        // Always ensure system display resolution is reset to normal
+        executeCommand("wm size reset")
+        executeCommand("wm density reset")
         if (scalePercent >= 99f) {
             return@withContext resetResolution()
         }
-        val physical = getPhysicalResolution()
-        val factor = (scalePercent / 100f).coerceIn(0.4f, 1.0f)
-        val targetW = ((physical.first * factor).toInt() / 2) * 2
-        val targetH = ((physical.second * factor).toInt() / 2) * 2
-        val res = executeCommand("wm size ${targetW}x${targetH}")
+        val factor = (scalePercent / 100f).coerceIn(0.5f, 1.0f)
+        val res = executeCommand("device_config put game_overlay com.roblox.client mode=2,downscale=$factor:fps=60")
         res.isSuccess
     }
 
     suspend fun resetResolution(): Boolean = withContext(Dispatchers.IO) {
-        val res = executeCommand("wm size reset")
+        // Fully restore phone resolution and undo any previous screen zoom
+        executeCommand("wm size reset")
         executeCommand("wm density reset")
-        res.isSuccess
+        executeCommand("device_config delete game_overlay com.roblox.client")
+        true
     }
 
     suspend fun compileRobloxSpeed(): Boolean = withContext(Dispatchers.IO) {

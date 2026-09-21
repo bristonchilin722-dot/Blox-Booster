@@ -71,6 +71,9 @@ import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.material.icons.filled.PowerSettingsNew
+
 @Composable
 fun FloatingPillHud(
     fps: Int,
@@ -78,6 +81,7 @@ fun FloatingPillHud(
     settings: BoostSettings,
     isExpanded: Boolean,
     onToggleExpand: () -> Unit,
+    onCloseCompletely: () -> Unit,
     onDrag: (Float, Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -96,7 +100,7 @@ fun FloatingPillHud(
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(20.dp))
-            .background(SurfaceDark.copy(alpha = 0.92f))
+            .background(SurfaceDark.copy(alpha = 0.95f))
             .border(1.5.dp, Brush.horizontalGradient(listOf(fpsColor, modeColor)), RoundedCornerShape(20.dp))
             .pointerInput(Unit) {
                 detectDragGestures { change, dragAmount ->
@@ -104,57 +108,83 @@ fun FloatingPillHud(
                     onDrag(dragAmount.x, dragAmount.y)
                 }
             }
-            .clickable { onToggleExpand() }
-            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .padding(horizontal = 8.dp, vertical = 5.dp)
             .testTag("floating_fps_pill")
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            // Live FPS
+            // Live FPS & Pill click area to expand
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { onToggleExpand() }
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(fpsColor)
+                )
+
+                Text(
+                    text = "$fps FPS",
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        fontWeight = FontWeight.Black,
+                        color = fpsColor,
+                        fontFamily = FontFamily.Monospace,
+                        letterSpacing = 0.5.sp
+                    )
+                )
+
+                Text(
+                    text = "|",
+                    color = BorderSubtle,
+                    fontSize = 11.sp
+                )
+
+                Text(
+                    text = when (settings.activeMode) {
+                        BoostMode.POTATO -> "POTATO"
+                        BoostMode.SHADERS -> "SHADERS"
+                        BoostMode.BALANCED -> "BALANCED"
+                    },
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = modeColor,
+                        fontSize = 10.sp
+                    )
+                )
+
+                Icon(
+                    imageVector = Icons.Default.Tune,
+                    contentDescription = "Expand Tuning Menu",
+                    tint = NeonCyan,
+                    modifier = Modifier.size(14.dp)
+                )
+            }
+
+            // Quick Close Completely button directly on floating pill
             Box(
                 modifier = Modifier
-                    .size(8.dp)
+                    .size(22.dp)
                     .clip(CircleShape)
-                    .background(fpsColor)
-            )
-
-            Text(
-                text = "$fps FPS",
-                style = MaterialTheme.typography.labelMedium.copy(
-                    fontWeight = FontWeight.Black,
-                    color = fpsColor,
-                    fontFamily = FontFamily.Monospace,
-                    letterSpacing = 0.5.sp
+                    .background(NeonRed.copy(alpha = 0.2f))
+                    .clickable { onCloseCompletely() }
+                    .testTag("pill_close_overlay_button"),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Close Overlay Completely",
+                    tint = NeonRed,
+                    modifier = Modifier.size(14.dp)
                 )
-            )
-
-            Text(
-                text = "|",
-                color = BorderSubtle,
-                fontSize = 11.sp
-            )
-
-            Text(
-                text = when (settings.activeMode) {
-                    BoostMode.POTATO -> "POTATO"
-                    BoostMode.SHADERS -> "SHADERS"
-                    BoostMode.BALANCED -> "BALANCED"
-                },
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = modeColor,
-                    fontSize = 10.sp
-                )
-            )
-
-            Icon(
-                imageVector = Icons.Default.Tune,
-                contentDescription = "Expand Tuning Menu",
-                tint = NeonCyan,
-                modifier = Modifier.size(14.dp)
-            )
+            }
         }
     }
 }
@@ -165,6 +195,7 @@ fun FloatingSideGameMenu(
     frameTimeMs: Float,
     settings: BoostSettings,
     onClose: () -> Unit,
+    onCloseCompletely: () -> Unit,
     onModeSelect: (BoostMode) -> Unit,
     onFpsCapSelect: (Int) -> Unit,
     onBoostIntensityChange: (Float) -> Unit,
@@ -176,7 +207,7 @@ fun FloatingSideGameMenu(
     modifier: Modifier = Modifier
 ) {
     Surface(
-        color = BackgroundDark.copy(alpha = 0.96f),
+        color = BackgroundDark.copy(alpha = 0.98f),
         shape = RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.4f)),
         modifier = modifier
@@ -187,9 +218,10 @@ fun FloatingSideGameMenu(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(14.dp)
+                .navigationBarsPadding()
+                .padding(horizontal = 14.dp, vertical = 12.dp)
         ) {
-            // Top Bar with Made by Briston
+            // Top Bar with Made by Briston & Close Options
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -221,16 +253,48 @@ fun FloatingSideGameMenu(
                     )
                 }
 
-                IconButton(
-                    onClick = onClose,
-                    modifier = Modifier.size(32.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Close Menu",
-                        tint = TextSecondary,
-                        modifier = Modifier.size(18.dp)
-                    )
+                    // Minimize to pill button
+                    IconButton(
+                        onClick = onClose,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Tune,
+                            contentDescription = "Minimize Menu",
+                            tint = NeonCyan,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    // Red Kill HUD button
+                    Button(
+                        onClick = onCloseCompletely,
+                        modifier = Modifier
+                            .height(28.dp)
+                            .testTag("top_close_overlay_button"),
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonRed.copy(alpha = 0.25f)),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, NeonRed),
+                        shape = RoundedCornerShape(6.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = null,
+                            tint = NeonRed,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Close HUD",
+                            color = NeonRed,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
 
@@ -525,6 +589,35 @@ fun FloatingSideGameMenu(
                     style = MaterialTheme.typography.labelMedium.copy(
                         color = BackgroundDark,
                         fontWeight = FontWeight.Black
+                    )
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Dedicated Close Completely Button
+            Button(
+                onClick = onCloseCompletely,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(42.dp)
+                    .testTag("menu_close_overlay_completely_button"),
+                colors = ButtonDefaults.buttonColors(containerColor = NeonRed.copy(alpha = 0.2f)),
+                border = androidx.compose.foundation.BorderStroke(1.dp, NeonRed),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = null,
+                    tint = NeonRed,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Close Overlay Completely",
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        color = NeonRed,
+                        fontWeight = FontWeight.Bold
                     )
                 )
             }

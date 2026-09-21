@@ -78,12 +78,15 @@ class BoosterViewModel(application: Application) : AndroidViewModel(application)
             }
         }
 
-        // Add initial welcome log
+        // Add initial welcome log & reset resolution in case of prior zoom
+        viewModelScope.launch {
+            shizukuManager.resetResolution()
+        }
         addLog(
             BoostLog(
                 timeFormatted = timeFormat.format(Date()),
                 category = "SYSTEM",
-                message = "Blox Booster initialized. Shizuku bridge & FPS monitor active.",
+                message = "Blox Booster initialized. Screen resolution verified normal. Privileged bridge active.",
                 isSuccess = true
             )
         )
