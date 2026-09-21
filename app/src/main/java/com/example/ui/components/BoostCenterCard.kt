@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -40,13 +42,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.data.model.BoostMode
 import com.example.data.model.BoostSettings
+import com.example.ui.theme.BackgroundDark
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonGreen
@@ -67,6 +73,7 @@ fun BoostCenterCard(
     onBoostClick: () -> Unit,
     onLaunchRoblox: () -> Unit,
     onOpenSideMenu: () -> Unit,
+    onResetCurrentMode: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "pulse_glow")
@@ -89,6 +96,12 @@ fun BoostCenterCard(
         label = "glow_alpha"
     )
 
+    val modeColor = when (settings.activeMode) {
+        BoostMode.POTATO -> NeonAmber
+        BoostMode.SHADERS -> NeonPurple
+        BoostMode.BALANCED -> NeonCyan
+    }
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -99,67 +112,97 @@ fun BoostCenterCard(
                 1.dp,
                 Brush.verticalGradient(
                     listOf(
-                        NeonCyan.copy(alpha = 0.4f),
-                        NeonPurple.copy(alpha = 0.1f)
+                        modeColor.copy(alpha = 0.45f),
+                        NeonCyan.copy(alpha = 0.15f)
                     )
                 ),
                 RoundedCornerShape(24.dp)
             )
-            .padding(20.dp),
+            .padding(18.dp),
         contentAlignment = Alignment.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.fillMaxWidth()
         ) {
-            // Active Mode Pill
-            val modeColor = when (settings.activeMode) {
-                BoostMode.POTATO -> NeonAmber
-                BoostMode.SHADERS -> NeonPurple
-                BoostMode.BALANCED -> NeonCyan
-            }
+            // Mode Banner with Reset Button
             Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(SurfaceCardLight)
-                    .clickable { onOpenSideMenu() }
-                    .padding(horizontal = 14.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                // Active Mode Pill
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(SurfaceCardLight)
+                        .clickable { onOpenSideMenu() }
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(modeColor)
+                    )
+                    Text(
+                        text = "${settings.activeMode.title.uppercase()} • ${settings.boostIntensity.toInt()}% INTENSITY",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = modeColor,
+                            letterSpacing = 0.6.sp
+                        )
+                    )
+                    Icon(
+                        imageVector = Icons.Default.Tune,
+                        contentDescription = null,
+                        tint = TextMuted,
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
+
+                // Reset Current Mode Button
                 Box(
                     modifier = Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(modeColor)
-                )
-                Text(
-                    text = "${settings.activeMode.title.uppercase()} • ${settings.boostIntensity.toInt()}% BOOST",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = modeColor,
-                        letterSpacing = 0.8.sp
-                    )
-                )
-                Icon(
-                    imageVector = Icons.Default.Tune,
-                    contentDescription = null,
-                    tint = TextMuted,
-                    modifier = Modifier.size(14.dp)
-                )
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(SurfaceCardLight.copy(alpha = 0.7f))
+                        .clickable { onResetCurrentMode() }
+                        .padding(horizontal = 8.dp, vertical = 5.dp)
+                        .testTag("reset_mode_button"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Reset Profile",
+                            tint = TextMuted,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(
+                            text = "Reset",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = TextMuted,
+                                fontSize = 10.sp
+                            )
+                        )
+                    }
+                }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            // Giant Boost Button with Ring
+            // Central Interactive Boost Core with Balaclava Sketch Artwork
             Box(
                 contentAlignment = Alignment.Center,
-                modifier = Modifier.size(170.dp)
+                modifier = Modifier.size(176.dp)
             ) {
                 // Outer glowing pulse ring
                 Box(
                     modifier = Modifier
-                        .size(165.dp)
+                        .size(170.dp)
                         .scale(if (isBoosting) 1.1f else pulseScale)
                         .clip(CircleShape)
                         .background(
@@ -175,30 +218,23 @@ fun BoostCenterCard(
                 // Outer border circle
                 Box(
                     modifier = Modifier
-                        .size(144.dp)
+                        .size(148.dp)
                         .clip(CircleShape)
                         .border(
                             2.dp,
                             Brush.sweepGradient(
-                                listOf(NeonCyan, NeonPurple, NeonGreen, NeonCyan)
+                                listOf(NeonCyan, modeColor, NeonGreen, NeonCyan)
                             ),
                             CircleShape
                         )
                 )
 
-                // Main Core Button
+                // Main Core Button containing the Balaclava Sketch
                 Box(
                     modifier = Modifier
-                        .size(126.dp)
+                        .size(130.dp)
                         .clip(CircleShape)
-                        .background(
-                            Brush.linearGradient(
-                                listOf(
-                                    SurfaceDark,
-                                    SurfaceCard
-                                )
-                            )
-                        )
+                        .background(BackgroundDark)
                         .clickable(enabled = !isBoosting) { onBoostClick() }
                         .testTag("boost_button"),
                     contentAlignment = Alignment.Center
@@ -206,8 +242,8 @@ fun BoostCenterCard(
                     if (isBoosting) {
                         CircularProgressIndicator(
                             progress = { boostProgress },
-                            modifier = Modifier.size(118.dp),
-                            color = NeonCyan,
+                            modifier = Modifier.size(122.dp),
+                            color = modeColor,
                             strokeWidth = 4.dp
                         )
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -215,11 +251,11 @@ fun BoostCenterCard(
                                 text = "${(boostProgress * 100).toInt()}%",
                                 style = MaterialTheme.typography.titleMedium.copy(
                                     fontWeight = FontWeight.Black,
-                                    color = NeonCyan
+                                    color = modeColor
                                 )
                             )
                             Text(
-                                text = "TUNING",
+                                text = "OPTIMIZING",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontSize = 9.sp,
                                     color = TextMuted,
@@ -228,40 +264,58 @@ fun BoostCenterCard(
                             )
                         }
                     } else {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Bolt,
-                                contentDescription = null,
-                                tint = NeonCyan,
-                                modifier = Modifier.size(38.dp)
+                        // Artwork background with overlay
+                        Box(contentAlignment = Alignment.Center) {
+                            Image(
+                                painter = painterResource(id = R.drawable.img_balaclava_sketch_1790022329166),
+                                contentDescription = "Black Balaclava Sketch",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .size(130.dp)
+                                    .clip(CircleShape)
                             )
-                            Text(
-                                text = "BOOST",
-                                style = MaterialTheme.typography.titleLarge.copy(
-                                    fontWeight = FontWeight.Black,
-                                    letterSpacing = 1.5.sp,
-                                    color = TextPrimary
+                            // Dark gradient overlay so text remains readable
+                            Box(
+                                modifier = Modifier
+                                    .size(130.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.55f))
+                            )
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Bolt,
+                                    contentDescription = null,
+                                    tint = modeColor,
+                                    modifier = Modifier.size(32.dp)
                                 )
-                            )
-                            Text(
-                                text = "ROBLOX",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = NeonPurple,
-                                    fontSize = 10.sp
+                                Text(
+                                    text = "BOOST",
+                                    style = MaterialTheme.typography.titleLarge.copy(
+                                        fontWeight = FontWeight.Black,
+                                        letterSpacing = 1.5.sp,
+                                        color = TextPrimary
+                                    )
                                 )
-                            )
+                                Text(
+                                    text = settings.activeMode.badge,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = modeColor,
+                                        fontSize = 10.sp
+                                    )
+                                )
+                            }
                         }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            // Progress or Subtitle Text
+            // Progress or Active Mode Description
             if (isBoosting) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -270,7 +324,7 @@ fun BoostCenterCard(
                     Text(
                         text = boostStepText,
                         style = MaterialTheme.typography.bodySmall.copy(
-                            color = NeonCyan,
+                            color = modeColor,
                             fontWeight = FontWeight.Medium
                         ),
                         textAlign = TextAlign.Center
@@ -279,32 +333,32 @@ fun BoostCenterCard(
                     LinearProgressIndicator(
                         progress = { boostProgress },
                         modifier = Modifier
-                            .fillMaxWidth(0.8f)
+                            .fillMaxWidth(0.85f)
                             .height(4.dp)
                             .clip(RoundedCornerShape(2.dp)),
-                        color = NeonCyan,
+                        color = modeColor,
                         trackColor = SurfaceDark
                     )
                 }
             } else {
                 Text(
-                    text = "Tap to optimize background tasks & unlock peak performance",
+                    text = settings.activeMode.description,
                     style = MaterialTheme.typography.bodySmall.copy(
                         color = TextSecondary,
-                        textAlign = TextAlign.Center
+                        textAlign = TextAlign.Center,
+                        lineHeight = 16.sp
                     ),
-                    modifier = Modifier.padding(horizontal = 16.dp)
+                    modifier = Modifier.padding(horizontal = 8.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.height(18.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // Action Buttons
+            // Action Buttons: Play Roblox & Side Tuner
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // Launch Roblox Button
                 Button(
                     onClick = onLaunchRoblox,
                     modifier = Modifier
@@ -320,7 +374,7 @@ fun BoostCenterCard(
                         imageVector = Icons.Default.PlayArrow,
                         contentDescription = null,
                         tint = SurfaceDark,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
@@ -332,7 +386,6 @@ fun BoostCenterCard(
                     )
                 }
 
-                // Open Side Tuner Menu
                 OutlinedButton(
                     onClick = onOpenSideMenu,
                     modifier = Modifier

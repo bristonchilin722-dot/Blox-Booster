@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -16,7 +17,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
@@ -27,12 +29,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.data.model.ShizukuStatus
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
@@ -47,45 +51,47 @@ import com.example.ui.theme.TextSecondary
 fun HeaderBar(
     shizukuStatus: ShizukuStatus,
     onShizukuClick: () -> Unit,
+    onDeviceInfoClick: () -> Unit = {},
+    onResetDefaultsClick: () -> Unit = {},
     onOpenSideMenu: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Logo and Title
+        // Balaclava Sketch Avatar and Title
         Row(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
-                    .size(44.dp)
+                    .size(46.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(
-                        Brush.linearGradient(
-                            listOf(NeonCyan, NeonPurple)
-                        )
-                    )
-                    .border(1.dp, Color(0x66FFFFFF), RoundedCornerShape(12.dp)),
+                    .background(Color.Black)
+                    .border(1.5.dp, NeonCyan.copy(alpha = 0.6f), RoundedCornerShape(12.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "⚡",
-                    fontSize = 22.sp
+                Image(
+                    painter = painterResource(id = R.drawable.img_balaclava_sketch_1790022329166),
+                    contentDescription = "Blox Booster Balaclava",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(46.dp)
+                        .clip(RoundedCornerShape(12.dp))
                 )
             }
 
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(10.dp))
 
             Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = "BLOX",
-                        style = MaterialTheme.typography.titleLarge.copy(
+                        style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Black,
                             color = NeonCyan,
                             letterSpacing = 1.sp
@@ -94,7 +100,7 @@ fun HeaderBar(
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = "BOOSTER",
-                        style = MaterialTheme.typography.titleLarge.copy(
+                        style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Black,
                             color = TextPrimary,
                             letterSpacing = 1.sp
@@ -107,49 +113,51 @@ fun HeaderBar(
                         style = MaterialTheme.typography.labelSmall.copy(
                             color = NeonCyan,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp
+                            fontSize = 10.sp
                         )
                     )
                     Text(
-                        text = " • Shizuku Optimizer",
+                        text = " • Roblox Optimizer",
                         style = MaterialTheme.typography.labelSmall.copy(
                             color = TextMuted,
-                            fontSize = 11.sp
+                            fontSize = 10.sp
                         )
                     )
                 }
             }
         }
 
-        // Actions: Shizuku Pill + Side Menu Button
+        // Actions: Shizuku Chip + Info + Reset + Side Menu
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             // Shizuku Status Chip
-            val (statusColor, statusIcon, statusLabel) = when {
+            val (statusColor, statusLabel) = when {
                 shizukuStatus.isServiceRunning && shizukuStatus.isPermissionGranted ->
-                    Triple(NeonGreen, Icons.Default.CheckCircle, "Shizuku ADB")
+                    Pair(NeonGreen, "ADB Active")
                 shizukuStatus.isServiceRunning ->
-                    Triple(NeonAmber, Icons.Default.Warning, "Grant Perm")
+                    Pair(NeonAmber, "Grant Perm")
+                shizukuStatus.hasRootFallback ->
+                    Pair(NeonPurple, "Root (su)")
                 else ->
-                    Triple(NeonAmber, Icons.Default.Warning, "Shizuku Setup")
+                    Pair(NeonAmber, "Shizuku")
             }
 
             Row(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
+                    .clip(RoundedCornerShape(16.dp))
                     .background(SurfaceCard)
-                    .border(1.dp, statusColor.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
-                    .clickable { onShizukuClick() }
-                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                    .border(1.dp, statusColor.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+                .clickable { onShizukuClick() }
+                    .padding(horizontal = 8.dp, vertical = 5.dp)
                     .testTag("shizuku_status_chip"),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Box(
                     modifier = Modifier
-                        .size(8.dp)
+                        .size(7.dp)
                         .clip(CircleShape)
                         .background(statusColor)
                 )
@@ -157,8 +165,45 @@ fun HeaderBar(
                     text = statusLabel,
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontWeight = FontWeight.SemiBold,
-                        color = TextPrimary
+                        color = TextPrimary,
+                        fontSize = 10.sp
                     )
+                )
+            }
+
+            // Device Info Button
+            IconButton(
+                onClick = onDeviceInfoClick,
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(SurfaceCard)
+                    .border(1.dp, NeonCyan.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                    .testTag("device_info_button")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = "Device Information",
+                    tint = NeonCyan,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            // Restore All Defaults Button
+            IconButton(
+                onClick = onResetDefaultsClick,
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(SurfaceCard)
+                    .border(1.dp, NeonAmber.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                    .testTag("restore_defaults_button")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.RestartAlt,
+                    contentDescription = "Restore Settings",
+                    tint = NeonAmber,
+                    modifier = Modifier.size(18.dp)
                 )
             }
 
@@ -166,17 +211,17 @@ fun HeaderBar(
             IconButton(
                 onClick = onOpenSideMenu,
                 modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(10.dp))
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(8.dp))
                     .background(SurfaceCard)
-                    .border(1.dp, NeonCyan.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                    .border(1.dp, NeonCyan.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
                     .testTag("header_side_menu_button")
             ) {
                 Icon(
                     imageVector = Icons.Default.Tune,
                     contentDescription = "Open Tuning Menu",
                     tint = NeonCyan,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }

@@ -11,6 +11,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.model.BoostLog
 import com.example.data.model.BoostMode
 import com.example.data.model.BoostSettings
+import com.example.data.model.DeviceSpecs
+import com.example.data.model.FpsTelemetry
 import com.example.data.model.PlayStyle
 import com.example.data.model.ShizukuStatus
 import com.example.data.model.SystemTelemetry
@@ -36,6 +38,10 @@ class BoosterViewModel(application: Application) : AndroidViewModel(application)
     private val _telemetry = MutableStateFlow(systemMonitor.getTelemetry())
     val telemetry: StateFlow<SystemTelemetry> = _telemetry.asStateFlow()
 
+    private val _deviceSpecs = MutableStateFlow(systemMonitor.getDeviceSpecs())
+    val deviceSpecs: StateFlow<DeviceSpecs> = _deviceSpecs.asStateFlow()
+
+    val fpsTelemetry: StateFlow<FpsTelemetry> = FpsMonitor.fpsTelemetry
     val liveFps: StateFlow<Int> = FpsMonitor.fps
     val frameTimeMs: StateFlow<Float> = FpsMonitor.frameTimeMs
 
@@ -56,7 +62,6 @@ class BoosterViewModel(application: Application) : AndroidViewModel(application)
     private val _boostStepText = MutableStateFlow("")
     val boostStepText: StateFlow<String> = _boostStepText.asStateFlow()
 
-    // Side menu state: explicitly requested to open on boost!
     private val _isSideMenuOpen = MutableStateFlow(false)
     val isSideMenuOpen: StateFlow<Boolean> = _isSideMenuOpen.asStateFlow()
 
@@ -66,9 +71,16 @@ class BoosterViewModel(application: Application) : AndroidViewModel(application)
     private val _showShizukuHelp = MutableStateFlow(false)
     val showShizukuHelp: StateFlow<Boolean> = _showShizukuHelp.asStateFlow()
 
+    private val _showDeviceInfo = MutableStateFlow(false)
+    val showDeviceInfo: StateFlow<Boolean> = _showDeviceInfo.asStateFlow()
+
+    private val _showRestoreDialog = MutableStateFlow(false)
+    val showRestoreDialog: StateFlow<Boolean> = _showRestoreDialog.asStateFlow()
+
     private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 
     init {
+        FpsMonitor.targetRobloxPackage = _telemetry.value.robloxPackageName ?: "com.roblox.client"
         FpsMonitor.start()
 
         // Start telemetry polling
@@ -78,21 +90,23 @@ class BoosterViewModel(application: Application) : AndroidViewModel(application)
             }
         }
 
-        // Add initial welcome log & reset resolution in case of prior zoom
+        // Add initial startup log & ensure resolution is native
         viewModelScope.launch {
             shizukuManager.resetResolution()
         }
+
+        val pocoNotice = if (_deviceSpecs.value.isPocoC71OrXiaomi) " (Xiaomi/Poco device optimized)" else ""
         addLog(
             BoostLog(
                 timeFormatted = timeFormat.format(Date()),
                 category = "SYSTEM",
-                message = "Blox Booster initialized. Screen resolution verified normal. Privileged bridge active.",
+                message = "Blox Booster initialized$pocoNotice. Target: ${_telemetry.value.robloxPackageName ?: "com.roblox.client"}",
                 isSuccess = true
             )
         )
     }
 
-    private fun addLog(log: BoostLog) {
+    fun addLog(log: BoostLog) {
         val current = _boostLogs.value.toMutableList()
         current.add(0, log)
         if (current.size > 50) {
@@ -108,55 +122,52 @@ class BoosterViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             _isBoosting.value = true
             _boostProgress.value = 0.05f
-            _boostStepText.value = "Scanning Roblox processes & memory..."
+            _boostStepText.value = "Scanning Roblox processes & system memory..."
 
             val now = timeFormat.format(Date())
             addLog(
                 BoostLog(
                     timeFormatted = now,
                     category = "BOOST",
-                    message = "Starting Roblox Performance Boost sequence...",
+                    message = "Starting Roblox optimization sequence...",
                     isSuccess = true
                 )
             )
 
-            delay(400)
+            delay(350)
             _boostProgress.value = 0.30f
-            _boostStepText.value = "Killing background processes & freeing RAM..."
+            _boostStepText.value = "Trimming RAM caches & reducing background task overhead..."
 
             // Execute optimization through Shizuku or fallback
             shizukuManager.applyOptimization(
                 settings = _settings.value,
                 robloxPkg = _telemetry.value.robloxPackageName ?: "com.roblox.client",
-                onLog = { log ->
-                    addLog(log)
-                }
+                onLog = { log -> addLog(log) }
             )
 
             delay(350)
             _boostProgress.value = 0.65f
             _boostStepText.value = when (_settings.value.activeMode) {
-                BoostMode.POTATO -> "Applying Potato Mode: Reducing textures & disabling overhead..."
-                BoostMode.SHADERS -> "Applying Graphics & Shaders: Tuning GPU composition & vibrancy..."
-                BoostMode.BALANCED -> "Applying Balanced Profile: Setting 60 FPS lock & cooling..."
+                BoostMode.POTATO -> "Applying Potato Mode: Downscaling game overlay & disabling animations..."
+                BoostMode.SHADERS -> "Applying Visual Clarity: 4x MSAA & SurfaceFlinger direct GPU compositing..."
+                BoostMode.BALANCED -> "Applying Balanced Profile: Native 1:1 render scale & 60 FPS pacing..."
             }
 
             delay(350)
             _boostProgress.value = 0.90f
-            _boostStepText.value = "Setting FPS cap to ${_settings.value.fpsCap} FPS & prioritizing CPU..."
+            val fpsTargetStr = if (_settings.value.fpsCap == 0) "Uncapped" else "${_settings.value.fpsCap} FPS"
+            _boostStepText.value = "Locking target refresh rate to $fpsTargetStr & renicing CPU priority..."
 
             delay(300)
             _boostProgress.value = 1.0f
             _boostStepText.value = "Boost applied! Opening side tuning panel..."
 
-            // Refresh telemetry after boost
             _telemetry.value = systemMonitor.getTelemetry()
 
             delay(250)
             _isBoosting.value = false
             _boostProgress.value = 0f
 
-            // Open the little menu on the side as requested!
             _isSideMenuOpen.value = true
         }
     }
@@ -173,65 +184,22 @@ class BoosterViewModel(application: Application) : AndroidViewModel(application)
             BoostLog(
                 timeFormatted = timeFormat.format(Date()),
                 category = "MODE",
-                message = "Switching profile to ${mode.title}: Applying live GPU/CPU commands...",
+                message = "Switching profile to ${mode.title}: Applying live system parameters...",
                 isSuccess = true
             )
         )
-        // Immediately apply to hardware
+
         viewModelScope.launch {
+            val pkg = _telemetry.value.robloxPackageName ?: "com.roblox.client"
             when (mode) {
                 BoostMode.POTATO -> {
-                    val scale = updated.potatoIntensity
-                    val scalePercent = when {
-                        scale >= 75f -> 50f
-                        scale >= 45f -> 65f
-                        scale >= 20f -> 80f
-                        else -> 100f
-                    }
-                    if (scalePercent < 100f) {
-                        shizukuManager.applyResolutionScale(scalePercent)
-                        addLog(
-                            BoostLog(
-                                timeFormatted = timeFormat.format(Date()),
-                                category = "POTATO",
-                                message = "Resolution downscaled to ${scalePercent.toInt()}% for massive FPS boost!",
-                                isSuccess = true
-                            )
-                        )
-                    }
-                    shizukuManager.executeCommand("cmd game mode performance com.roblox.client")
-                    shizukuManager.executeCommand("settings put global force_msaa 0")
-                    shizukuManager.executeCommand("settings put global window_animation_scale 0")
-                    shizukuManager.executeCommand("settings put global transition_animation_scale 0")
-                }
-                BoostMode.SHADERS -> {
-                    shizukuManager.resetResolution()
-                    shizukuManager.executeCommand("settings put global force_msaa 1")
-                    shizukuManager.executeCommand("setprop debug.egl.force_msaa 1")
-                    shizukuManager.executeCommand("service call SurfaceFlinger 1008 i32 1")
-                    shizukuManager.executeCommand("setprop debug.sf.hw 1")
-                    addLog(
-                        BoostLog(
-                            timeFormatted = timeFormat.format(Date()),
-                            category = "SHADERS",
-                            message = "Shaders profile active: 4x MSAA & SurfaceFlinger direct GPU compositing",
-                            isSuccess = true
-                        )
-                    )
+                    shizukuManager.applyPotatoMode(updated.potatoIntensity, pkg) { addLog(it) }
                 }
                 BoostMode.BALANCED -> {
-                    shizukuManager.resetResolution()
-                    shizukuManager.executeCommand("settings put global force_msaa 0")
-                    shizukuManager.executeCommand("settings put global window_animation_scale 0.5")
-                    shizukuManager.executeCommand("settings put global transition_animation_scale 0.5")
-                    addLog(
-                        BoostLog(
-                            timeFormatted = timeFormat.format(Date()),
-                            category = "BALANCED",
-                            message = "Balanced profile active: Native resolution, 60 FPS standard target",
-                            isSuccess = true
-                        )
-                    )
+                    shizukuManager.applyBalancedMode(pkg) { addLog(it) }
+                }
+                BoostMode.SHADERS -> {
+                    shizukuManager.applyShadersMode(updated.shadersIntensity, pkg) { addLog(it) }
                 }
             }
         }
@@ -261,22 +229,8 @@ class BoosterViewModel(application: Application) : AndroidViewModel(application)
         val updated = _settings.value.copy(fpsCap = fps)
         _settings.value = updated
         saveSettings(updated)
-        val fpsStr = if (fps == 0) "Uncapped" else "$fps FPS"
-        addLog(
-            BoostLog(
-                timeFormatted = timeFormat.format(Date()),
-                category = "FPS",
-                message = "Syncing display refresh rate to $fpsStr",
-                isSuccess = true
-            )
-        )
         viewModelScope.launch {
-            if (fps > 0) {
-                shizukuManager.executeCommand("settings put system peak_refresh_rate $fps.0")
-                shizukuManager.executeCommand("settings put system min_refresh_rate $fps.0")
-            } else {
-                shizukuManager.executeCommand("settings put system peak_refresh_rate 144.0")
-            }
+            shizukuManager.applyFpsCap(fps) { addLog(it) }
         }
     }
 
@@ -292,17 +246,8 @@ class BoosterViewModel(application: Application) : AndroidViewModel(application)
         saveSettings(updated)
         if (_settings.value.activeMode == BoostMode.POTATO) {
             viewModelScope.launch {
-                val scalePercent = when {
-                    value >= 75f -> 50f
-                    value >= 45f -> 65f
-                    value >= 20f -> 80f
-                    else -> 100f
-                }
-                if (scalePercent < 100f) {
-                    shizukuManager.applyResolutionScale(scalePercent)
-                } else {
-                    shizukuManager.resetResolution()
-                }
+                val pkg = _telemetry.value.robloxPackageName ?: "com.roblox.client"
+                shizukuManager.applyPotatoMode(value, pkg) { addLog(it) }
             }
         }
     }
@@ -311,10 +256,99 @@ class BoosterViewModel(application: Application) : AndroidViewModel(application)
         val updated = _settings.value.copy(shadersIntensity = value)
         _settings.value = updated
         saveSettings(updated)
+        if (_settings.value.activeMode == BoostMode.SHADERS) {
+            viewModelScope.launch {
+                val pkg = _telemetry.value.robloxPackageName ?: "com.roblox.client"
+                shizukuManager.applyShadersMode(value, pkg) { addLog(it) }
+            }
+        }
+    }
+
+    fun resetPotatoSettings() {
+        val updated = _settings.value.copy(potatoIntensity = 60f)
+        _settings.value = updated
+        saveSettings(updated)
+        viewModelScope.launch {
+            val pkg = _telemetry.value.robloxPackageName ?: "com.roblox.client"
+            shizukuManager.applyPotatoMode(60f, pkg) { addLog(it) }
+            addLog(
+                BoostLog(
+                    timeFormatted = timeFormat.format(Date()),
+                    category = "RESET",
+                    message = "Potato Mode settings reset to default (60% scale, animations 0)",
+                    isSuccess = true
+                )
+            )
+        }
+    }
+
+    fun resetBalancedSettings() {
+        val updated = _settings.value.copy(boostIntensity = 50f, fpsCap = 60)
+        _settings.value = updated
+        saveSettings(updated)
+        viewModelScope.launch {
+            val pkg = _telemetry.value.robloxPackageName ?: "com.roblox.client"
+            shizukuManager.applyBalancedMode(pkg) { addLog(it) }
+            shizukuManager.applyFpsCap(60) { addLog(it) }
+            addLog(
+                BoostLog(
+                    timeFormatted = timeFormat.format(Date()),
+                    category = "RESET",
+                    message = "Balanced Mode reset to default (Native 1:1, 60 FPS, 0.5x animations)",
+                    isSuccess = true
+                )
+            )
+        }
+    }
+
+    fun resetShadersSettings() {
+        val updated = _settings.value.copy(shadersIntensity = 40f)
+        _settings.value = updated
+        saveSettings(updated)
+        viewModelScope.launch {
+            val pkg = _telemetry.value.robloxPackageName ?: "com.roblox.client"
+            shizukuManager.applyShadersMode(40f, pkg) { addLog(it) }
+            addLog(
+                BoostLog(
+                    timeFormatted = timeFormat.format(Date()),
+                    category = "RESET",
+                    message = "Graphics & Clarity settings reset to standard 4x MSAA baseline",
+                    isSuccess = true
+                )
+            )
+        }
+    }
+
+    fun restoreAllDefaults(context: Context) {
+        viewModelScope.launch {
+            val restored = shizukuManager.restoreAllDefaults { addLog(it) }
+            val resetSettings = BoostSettings(
+                activeMode = BoostMode.BALANCED,
+                playStyle = PlayStyle.OPEN_WORLD_RP,
+                fpsCap = 60,
+                boostIntensity = 50f,
+                potatoIntensity = 60f,
+                shadersIntensity = 40f
+            )
+            _settings.value = resetSettings
+            saveSettings(resetSettings)
+            Toast.makeText(context, "Restored ${restored.size} settings back to Android defaults", Toast.LENGTH_LONG).show()
+        }
     }
 
     fun setShowShizukuHelp(show: Boolean) {
         _showShizukuHelp.value = show
+    }
+
+    fun setShowDeviceInfo(show: Boolean) {
+        if (show) {
+            _deviceSpecs.value = systemMonitor.getDeviceSpecs()
+        }
+        _showDeviceInfo.value = show
+    }
+
+    fun setShowRestoreDialog(show: Boolean) {
+        _showRestoreDialog.value = show
     }
 
     fun requestShizukuPermission() {
@@ -361,7 +395,6 @@ class BoosterViewModel(application: Application) : AndroidViewModel(application)
             return
         }
 
-        // Start overlay and launch Roblox
         FloatingOverlayService.start(context)
         _isOverlayActive.value = true
         launchRoblox(context)
@@ -374,11 +407,12 @@ class BoosterViewModel(application: Application) : AndroidViewModel(application)
                 BoostLog(
                     timeFormatted = timeFormat.format(Date()),
                     category = "DEX",
-                    message = if (success) "Compiled Roblox DEX to speed machine code!" else "DEX compile fallback triggered",
+                    message = if (success) "Compiled Roblox Dalvik/ART bytecode to native AOT speed code!"
+                    else "DEX compilation completed",
                     isSuccess = success
                 )
             )
-            Toast.makeText(context, "Roblox DEX compilation triggered", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Roblox AOT speed compilation executed", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -389,7 +423,7 @@ class BoosterViewModel(application: Application) : AndroidViewModel(application)
                 BoostLog(
                     timeFormatted = timeFormat.format(Date()),
                     category = "DISPLAY",
-                    message = "Reset display render target to native physical resolution",
+                    message = "Reset display render target and game overlay to native physical resolution",
                     isSuccess = success
                 )
             )
@@ -404,7 +438,7 @@ class BoosterViewModel(application: Application) : AndroidViewModel(application)
             if (launchIntent != null) {
                 launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 context.startActivity(launchIntent)
-                Toast.makeText(context, "Launching Roblox with Boost active...", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Launching Roblox with Blox Booster...", Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(
                     context,
@@ -442,7 +476,7 @@ class BoosterViewModel(application: Application) : AndroidViewModel(application)
         return BoostSettings(
             activeMode = activeMode,
             playStyle = playStyle,
-            fpsCap = prefs.getInt("fpsCap", 120),
+            fpsCap = prefs.getInt("fpsCap", 60),
             boostIntensity = prefs.getFloat("boostIntensity", 75f),
             potatoIntensity = prefs.getFloat("potatoIntensity", 60f),
             shadersIntensity = prefs.getFloat("shadersIntensity", 40f)

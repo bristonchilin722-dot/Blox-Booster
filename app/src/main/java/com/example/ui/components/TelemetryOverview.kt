@@ -29,7 +29,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -73,6 +72,7 @@ fun TelemetryOverview(
                 title = "RAM USAGE",
                 value = "${telemetry.usedRamMb} MB",
                 subtext = "${telemetry.freeRamMb} MB Free",
+                caption = "Kernel Memory Compaction",
                 icon = Icons.Default.Memory,
                 accentColor = if (telemetry.ramPercentage > 80) NeonAmber else NeonCyan,
                 progress = telemetry.ramPercentage / 100f
@@ -87,6 +87,7 @@ fun TelemetryOverview(
                 title = "FRAME TARGET",
                 value = fpsDisplay,
                 subtext = "${telemetry.refreshRate} Hz Display",
+                caption = "SurfaceFlinger VSync",
                 icon = Icons.Default.Speed,
                 accentColor = NeonPurple,
                 progress = if (targetFps == 0) 1f else (targetFps / 144f).coerceIn(0f, 1f)
@@ -100,17 +101,24 @@ fun TelemetryOverview(
         ) {
             // Thermals Card
             val tempColor = when {
-                telemetry.batteryTemp > 42f -> NeonRed
-                telemetry.batteryTemp > 37f -> NeonAmber
+                telemetry.batteryTemp >= 46f -> NeonRed
+                telemetry.batteryTemp >= 42f -> NeonAmber
                 else -> NeonGreen
             }
+            val thermalSubtitle = when {
+                telemetry.batteryTemp >= 46f -> "Throttling Alert"
+                telemetry.batteryTemp >= 42f -> "Elevated Temp"
+                else -> "Optimal (${telemetry.batteryLevel}%)"
+            }
+
             TelemetryTile(
                 modifier = Modifier
                     .weight(1f)
                     .testTag("telemetry_thermal_card"),
                 title = "THERMALS",
                 value = "%.1f °C".format(telemetry.batteryTemp),
-                subtext = "Battery ${telemetry.batteryLevel}%",
+                subtext = thermalSubtitle,
+                caption = "Battery Sensor (BatteryManager)",
                 icon = Icons.Default.Thermostat,
                 accentColor = tempColor,
                 progress = (telemetry.batteryTemp / 50f).coerceIn(0f, 1f)
@@ -122,8 +130,9 @@ fun TelemetryOverview(
                     .weight(1f)
                     .testTag("telemetry_roblox_card"),
                 title = "ROBLOX ENGINE",
-                value = if (telemetry.isRobloxInstalled) "Installed" else "Ready",
+                value = if (telemetry.isRobloxInstalled) "Detected" else "Ready",
                 subtext = telemetry.robloxPackageName ?: "com.roblox.client",
+                caption = "60 FPS Native Client Cap",
                 icon = Icons.Default.VideogameAsset,
                 accentColor = if (telemetry.isRobloxInstalled) NeonGreen else NeonCyan,
                 progress = 1f
@@ -137,6 +146,7 @@ private fun TelemetryTile(
     title: String,
     value: String,
     subtext: String,
+    caption: String? = null,
     icon: ImageVector,
     accentColor: androidx.compose.ui.graphics.Color,
     progress: Float,
@@ -203,7 +213,18 @@ private fun TelemetryTile(
                 maxLines = 1
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            if (caption != null) {
+                Text(
+                    text = caption,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        color = TextMuted,
+                        fontSize = 9.sp
+                    ),
+                    maxLines = 1
+                )
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
 
             LinearProgressIndicator(
                 progress = { animatedProgress },

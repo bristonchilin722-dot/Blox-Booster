@@ -3,6 +3,6 @@
     <item
         android:width="66dp"
         android:height="66dp"
-        android:drawable="@drawable/blox_booster_icon_1789997442472"
+        android:drawable="@drawable/img_balaclava_sketch_1790022329166"
         android:gravity="center" />
 </layer-list>

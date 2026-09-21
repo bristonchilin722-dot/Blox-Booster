@@ -1,13 +1,11 @@
 package com.example
 
+import android.app.Activity
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,15 +15,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
@@ -34,11 +28,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.PowerSettingsNew
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -52,20 +47,25 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.service.FloatingOverlayService
 import com.example.ui.components.BoostCenterCard
+import com.example.ui.components.DeviceInfoDialog
 import com.example.ui.components.HeaderBar
 import com.example.ui.components.LogTerminalCard
 import com.example.ui.components.OverlayLauncherCard
+import com.example.ui.components.RestoreSettingsDialog
 import com.example.ui.components.ShizukuSetupDialog
 import com.example.ui.components.SideTuningMenu
 import com.example.ui.components.TelemetryOverview
 import com.example.ui.theme.BackgroundDark
 import com.example.ui.theme.MyApplicationTheme
+import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonPurple
+import com.example.ui.theme.NeonRed
 import com.example.ui.theme.SurfaceCard
+import com.example.ui.theme.SurfaceDark
 import com.example.ui.theme.TextMuted
-import com.example.ui.theme.TextPrimary
 import com.example.ui.viewmodel.BoosterViewModel
 
 class MainActivity : ComponentActivity() {
@@ -95,6 +95,7 @@ fun BoosterApp(
 ) {
     val context = LocalContext.current
     val telemetry by viewModel.telemetry.collectAsState()
+    val deviceSpecs by viewModel.deviceSpecs.collectAsState()
     val settings by viewModel.settings.collectAsState()
     val shizukuStatus by viewModel.shizukuStatus.collectAsState()
     val isBoosting by viewModel.isBoosting.collectAsState()
@@ -103,6 +104,8 @@ fun BoosterApp(
     val isSideMenuOpen by viewModel.isSideMenuOpen.collectAsState()
     val logs by viewModel.boostLogs.collectAsState()
     val showShizukuHelp by viewModel.showShizukuHelp.collectAsState()
+    val showDeviceInfo by viewModel.showDeviceInfo.collectAsState()
+    val showRestoreDialog by viewModel.showRestoreDialog.collectAsState()
     val isOverlayActive by viewModel.isOverlayActive.collectAsState()
     val liveFps by viewModel.liveFps.collectAsState()
     val frameTimeMs by viewModel.frameTimeMs.collectAsState()
@@ -125,14 +128,16 @@ fun BoosterApp(
                     .navigationBarsPadding()
                     .verticalScroll(rememberScrollState())
             ) {
-                // Top Header Bar
+                // Top Header Bar with Balaclava Sketch & Status Chips
                 HeaderBar(
                     shizukuStatus = shizukuStatus,
                     onShizukuClick = { viewModel.setShowShizukuHelp(true) },
+                    onDeviceInfoClick = { viewModel.setShowDeviceInfo(true) },
+                    onResetDefaultsClick = { viewModel.setShowRestoreDialog(true) },
                     onOpenSideMenu = { viewModel.toggleSideMenu(true) }
                 )
 
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(4.dp))
 
                 // Telemetry Overview: RAM, FPS, Thermals, Roblox
                 TelemetryOverview(
@@ -140,7 +145,7 @@ fun BoosterApp(
                     targetFps = settings.fpsCap
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 // Center Boost Action Card
                 BoostCenterCard(
@@ -150,10 +155,17 @@ fun BoosterApp(
                     boostStepText = boostStepText,
                     onBoostClick = { viewModel.boostRoblox() },
                     onLaunchRoblox = { viewModel.launchRobloxWithOverlay(context) },
-                    onOpenSideMenu = { viewModel.toggleSideMenu(true) }
+                    onOpenSideMenu = { viewModel.toggleSideMenu(true) },
+                    onResetCurrentMode = {
+                        when (settings.activeMode) {
+                            com.example.data.model.BoostMode.POTATO -> viewModel.resetPotatoSettings()
+                            com.example.data.model.BoostMode.BALANCED -> viewModel.resetBalancedSettings()
+                            com.example.data.model.BoostMode.SHADERS -> viewModel.resetShadersSettings()
+                        }
+                    }
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 // In-Game Floating HUD & Menu Over Roblox Card
                 OverlayLauncherCard(
@@ -174,7 +186,7 @@ fun BoosterApp(
                     }
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 // Live ADB / Shizuku Optimization Log Terminal
                 LogTerminalCard(
@@ -182,7 +194,48 @@ fun BoosterApp(
                     onClearLogs = { viewModel.clearLogs() }
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Close App Completely Button (User Request)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            FloatingOverlayService.stop(context)
+                            viewModel.resetResolution(context)
+                            (context as? Activity)?.finishAffinity()
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .testTag("close_app_completely_button"),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = SurfaceDark
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, NeonRed.copy(alpha = 0.7f)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PowerSettingsNew,
+                            contentDescription = null,
+                            tint = NeonRed,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Close Blox Booster Completely",
+                            style = MaterialTheme.typography.labelLarge.copy(
+                                color = NeonRed,
+                                fontWeight = FontWeight.Bold
+                            )
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // Made by Briston Credit
                 Row(
@@ -227,10 +280,10 @@ fun BoosterApp(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(28.dp))
             }
 
-            // Side Peek Tab (allows user to easily pull out the side tuner from the right edge anytime)
+            // Side Peek Tab (pull out the side tuner from the right edge anytime)
             if (!isSideMenuOpen) {
                 Box(
                     modifier = Modifier
@@ -269,7 +322,7 @@ fun BoosterApp(
                 }
             }
 
-            // The Little Menu on the Side (opens when you press boost or tap side tuner)
+            // Side Tuning Drawer
             SideTuningMenu(
                 isOpen = isSideMenuOpen,
                 settings = settings,
@@ -280,6 +333,9 @@ fun BoosterApp(
                 onBoostIntensityChange = { viewModel.updateBoostIntensity(it) },
                 onPotatoIntensityChange = { viewModel.updatePotatoIntensity(it) },
                 onShadersIntensityChange = { viewModel.updateShadersIntensity(it) },
+                onResetBoostIntensity = { viewModel.updateBoostIntensity(50f) },
+                onResetPotatoIntensity = { viewModel.resetPotatoSettings() },
+                onResetShadersIntensity = { viewModel.resetShadersSettings() },
                 onReboost = {
                     viewModel.toggleSideMenu(false)
                     viewModel.boostRoblox()
@@ -295,6 +351,26 @@ fun BoosterApp(
                     onDismiss = { viewModel.setShowShizukuHelp(false) },
                     onRequestPermission = { viewModel.requestShizukuPermission() },
                     onRefreshStatus = { viewModel.checkShizukuStatus() }
+                )
+            }
+
+            // Device Info Hardware Dialog
+            if (showDeviceInfo) {
+                DeviceInfoDialog(
+                    specs = deviceSpecs,
+                    telemetry = telemetry,
+                    onDismiss = { viewModel.setShowDeviceInfo(false) }
+                )
+            }
+
+            // Restore All Defaults Dialog
+            if (showRestoreDialog) {
+                RestoreSettingsDialog(
+                    onConfirmRestore = {
+                        viewModel.restoreAllDefaults(context)
+                        viewModel.setShowRestoreDialog(false)
+                    },
+                    onDismiss = { viewModel.setShowRestoreDialog(false) }
                 )
             }
         }

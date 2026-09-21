@@ -21,8 +21,10 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -32,9 +34,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Gamepad
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Button
@@ -52,7 +55,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -74,9 +76,6 @@ import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.statusBarsPadding
-
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SideTuningMenu(
@@ -89,6 +88,9 @@ fun SideTuningMenu(
     onBoostIntensityChange: (Float) -> Unit,
     onPotatoIntensityChange: (Float) -> Unit,
     onShadersIntensityChange: (Float) -> Unit,
+    onResetBoostIntensity: () -> Unit = {},
+    onResetPotatoIntensity: () -> Unit = {},
+    onResetShadersIntensity: () -> Unit = {},
     onReboost: () -> Unit,
     onLaunchRoblox: () -> Unit,
     modifier: Modifier = Modifier
@@ -165,7 +167,7 @@ fun SideTuningMenu(
                                 )
                             )
                             Text(
-                                text = "Made by Briston • Shizuku Quick Panel",
+                                text = "Made by Briston • Verified Optimizations",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = NeonCyan,
                                     fontWeight = FontWeight.Bold,
@@ -289,7 +291,6 @@ fun SideTuningMenu(
                     // 2. Play Style & Custom FPS Caps
                     SectionCard(title = "PLAY STYLES & FPS CAP", subtitle = "Match Roblox game genres") {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            // Play Style Chips
                             FlowRow(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -335,7 +336,7 @@ fun SideTuningMenu(
                             Spacer(modifier = Modifier.height(2.dp))
 
                             Text(
-                                text = "Custom FPS Cap:",
+                                text = "Target Display Refresh & FPS Lock:",
                                 style = MaterialTheme.typography.labelMedium.copy(
                                     color = TextPrimary,
                                     fontWeight = FontWeight.SemiBold
@@ -352,7 +353,7 @@ fun SideTuningMenu(
                             ) {
                                 fpsOptions.forEach { fps ->
                                     val isSelected = settings.fpsCap == fps
-                                    val label = if (fps == 0) "∞ MAX" else "$fps"
+                                    val label = if (fps == 0) "∞ MAX" else "$fps FPS"
 
                                     Box(
                                         modifier = Modifier
@@ -373,41 +374,77 @@ fun SideTuningMenu(
                                     }
                                 }
                             }
+
+                            Text(
+                                text = "Note: Roblox mobile engine caps internally at 60 FPS. Setting 60 FPS locks Android display VSync for zero frame judder.",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = TextMuted,
+                                    fontSize = 10.sp
+                                )
+                            )
                         }
                     }
 
-                    // 3. The 3 Interactive Scales (Boost, Potato, Shaders)
-                    SectionCard(title = "INTENSITY SCALES", subtitle = "Fine-tune optimization depth") {
-                        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    // 3. The 3 Verified Intensity Scales (Boost, Potato, Shaders)
+                    SectionCard(title = "INTENSITY SCALES & RESET", subtitle = "Fine-tune and verify hardware limits") {
+                        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                             // Scale 1: System Boost Scale
-                            IntensitySlider(
+                            IntensitySliderWithReset(
                                 title = "⚡ SYSTEM BOOST SCALE",
                                 value = settings.boostIntensity,
                                 onValueChange = onBoostIntensityChange,
+                                onReset = onResetBoostIntensity,
                                 accentColor = NeonCyan,
                                 description = getBoostScaleDescription(settings.boostIntensity),
                                 testTag = "boost_intensity_slider"
                             )
 
                             // Scale 2: Potato Mode Scale
-                            IntensitySlider(
+                            IntensitySliderWithReset(
                                 title = "🥔 POTATO MODE SCALE",
                                 value = settings.potatoIntensity,
                                 onValueChange = onPotatoIntensityChange,
+                                onReset = onResetPotatoIntensity,
                                 accentColor = NeonAmber,
                                 description = getPotatoScaleDescription(settings.potatoIntensity),
                                 testTag = "potato_intensity_slider"
                             )
 
                             // Scale 3: Graphics & Shaders Scale
-                            IntensitySlider(
-                                title = "✨ GRAPHICS SHADERS SCALE",
+                            IntensitySliderWithReset(
+                                title = "✨ GRAPHICS & CLARITY SCALE",
                                 value = settings.shadersIntensity,
                                 onValueChange = onShadersIntensityChange,
+                                onReset = onResetShadersIntensity,
                                 accentColor = NeonPurple,
                                 description = getShadersScaleDescription(settings.shadersIntensity),
                                 testTag = "shaders_intensity_slider"
                             )
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(SurfaceCardLight.copy(alpha = 0.5f))
+                                    .padding(8.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Info,
+                                        contentDescription = null,
+                                        tint = NeonCyan,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Roblox engine does not support PC ReShade. Blox Booster applies 4x MSAA anti-aliasing & GPU SurfaceFlinger safely.",
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            color = TextSecondary,
+                                            fontSize = 10.sp
+                                        )
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -511,10 +548,11 @@ private fun SectionCard(
 }
 
 @Composable
-private fun IntensitySlider(
+private fun IntensitySliderWithReset(
     title: String,
     value: Float,
     onValueChange: (Float) -> Unit,
+    onReset: () -> Unit,
     accentColor: Color,
     description: String,
     testTag: String
@@ -532,13 +570,40 @@ private fun IntensitySlider(
                     color = TextPrimary
                 )
             )
-            Text(
-                text = "${value.toInt()}%",
-                style = MaterialTheme.typography.labelMedium.copy(
-                    fontWeight = FontWeight.Black,
-                    color = accentColor
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "${value.toInt()}%",
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        fontWeight = FontWeight.Black,
+                        color = accentColor
+                    )
                 )
-            )
+                Spacer(modifier = Modifier.width(8.dp))
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(SurfaceCardLight)
+                        .clickable { onReset() }
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Reset slider",
+                            tint = TextMuted,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Text(
+                            text = "Reset",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 10.sp,
+                                color = TextMuted
+                            )
+                        )
+                    }
+                }
+            }
         }
 
         Slider(
@@ -566,27 +631,25 @@ private fun IntensitySlider(
 
 private fun getBoostScaleDescription(intensity: Float): String {
     return when {
-        intensity < 25f -> "Mild: Background RAM cache trim & phantom task check"
-        intensity < 50f -> "Balanced: Auto background process killer & memory compaction"
-        intensity < 80f -> "Aggressive: Phantom process limit 4, CPU nice -10 priority"
-        else -> "Extreme Turbo: Realtime CPU nice -20, max core lock & zero background throttling"
+        intensity < 25f -> "Mild: Memory page cache trim & basic garbage collection"
+        intensity < 50f -> "Standard: am kill-all background tasks & max phantom processes: 8"
+        intensity < 75f -> "Aggressive: Max phantom processes: 4, CPU nice -10 priority"
+        else -> "Extreme Turbo: Max phantom processes: 2, CPU nice -20 priority & AOT speed compilation"
     }
 }
 
 private fun getPotatoScaleDescription(intensity: Float): String {
     return when {
-        intensity < 25f -> "Light: Softened shadows & reduced particle density"
-        intensity < 50f -> "Medium: Reduced animations, 80% render scale & texture compression"
-        intensity < 75f -> "Heavy Potato: 60% render scale, 0 animations & zero motion blur"
-        else -> "Ultra Potato: 50% render scale, flat textures & maximum FPS stability for low-end phones"
+        intensity < 34f -> "Level 1: Disables window animations, disables 4x MSAA, Android Game Mode Performance"
+        intensity < 67f -> "Level 2: Level 1 + Game Overlay Downscale (0.7x target) & background task kill"
+        else -> "Level 3 Ultra Potato: Level 2 + Game Overlay Downscale (0.5x target) + AOT speed compile"
     }
 }
 
 private fun getShadersScaleDescription(intensity: Float): String {
     return when {
-        intensity < 25f -> "Subtle: Contrast boost & 2x FXAA edge smoothing"
-        intensity < 50f -> "Vivid: 4x MSAA, enhanced saturation & SurfaceFlinger GPU composition"
-        intensity < 75f -> "Ultra Shaders: Dynamic contrast depth, rich lighting & HDR tone mapping"
-        else -> "Hyper Shaders: Max MSAA, intense bloom, vivid depth & high-fidelity graphics"
+        intensity < 34f -> "Native Crisp: 1:1 pixel rendering, standard driver compositing"
+        intensity < 67f -> "Enhanced Clarity: SurfaceFlinger direct GPU compositing & 2x MSAA"
+        else -> "High Fidelity: Force 4x MSAA hardware anti-aliasing + SurfaceFlinger direct GPU pipeline"
     }
 }
