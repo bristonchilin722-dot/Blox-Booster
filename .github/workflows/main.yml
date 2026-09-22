@@ -27,9 +27,13 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Generate Gradle Wrapper
+        run: gradle wrapper
+        working-directory: android
+
       - name: Build debug APK
-        run: gradle assembleDebug
-        working-directory: ./android
+        run: ./gradlew assembleDebug
+        working-directory: android
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
