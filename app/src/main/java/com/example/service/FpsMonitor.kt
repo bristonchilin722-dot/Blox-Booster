@@ -23,10 +23,16 @@ object FpsMonitor {
     private val _fpsTelemetry = MutableStateFlow(
         FpsTelemetry(
             currentFps = 60,
+            averageFps = 60,
+            minFps = 60,
             frameTimeMs = 16.6f,
             source = FpsSource.DISPLAY_COMPOSITOR,
             isRobloxActive = false,
-            jankyFramesPercent = 0f
+            isRobloxRunning = false,
+            jankyFramesPercent = 0f,
+            fpsStabilityPercent = 100f,
+            displayRefreshRate = 60,
+            targetFps = 60
         )
     )
     val fpsTelemetry: StateFlow<FpsTelemetry> = _fpsTelemetry.asStateFlow()
@@ -51,6 +57,21 @@ object FpsMonitor {
     private var lastGfxFrames = 0L
     private var lastGfxTimestamp = 0L
 
+    // Session Statistics tracking
+    private val fpsHistory = mutableListOf<Int>()
+    private var sessionMinFps = 240
+    private var totalSampleFrames = 0L
+    private var totalSampleJank = 0L
+
+    fun resetSessionStats() {
+        synchronized(fpsHistory) {
+            fpsHistory.clear()
+            sessionMinFps = 240
+            totalSampleFrames = 0L
+            totalSampleJank = 0L
+        }
+    }
+
     private val frameCallback = object : Choreographer.FrameCallback {
         override fun doFrame(frameTimeNanos: Long) {
             if (!isRunning) return
@@ -66,12 +87,18 @@ object FpsMonitor {
 
                     // If gfxinfo is not currently driving telemetry, update from Choreographer
                     if (_fpsTelemetry.value.source != FpsSource.ROBLOX_SURFACE_GFXINFO) {
+                        recordFpsSample(calculatedFps, 0f)
+
                         _fps.value = calculatedFps
                         _frameTimeMs.value = frameTime
                         _fpsTelemetry.value = _fpsTelemetry.value.copy(
                             currentFps = calculatedFps,
+                            averageFps = calculateAverageFps(calculatedFps),
+                            minFps = calculateMinFps(calculatedFps),
                             frameTimeMs = frameTime,
-                            source = FpsSource.DISPLAY_COMPOSITOR
+                            source = FpsSource.DISPLAY_COMPOSITOR,
+                            isRobloxActive = false,
+                            fpsStabilityPercent = 95f
                         )
                     }
 
@@ -81,6 +108,34 @@ object FpsMonitor {
             }
 
             Choreographer.getInstance().postFrameCallback(this)
+        }
+    }
+
+    private fun recordFpsSample(fps: Int, jankPercent: Float) {
+        synchronized(fpsHistory) {
+            if (fps in 1..240) {
+                fpsHistory.add(fps)
+                if (fpsHistory.size > 120) {
+                    fpsHistory.removeAt(0)
+                }
+                if (fps < sessionMinFps) {
+                    sessionMinFps = fps
+                }
+            }
+        }
+    }
+
+    private fun calculateAverageFps(fallback: Int): Int {
+        synchronized(fpsHistory) {
+            return if (fpsHistory.isNotEmpty()) {
+                fpsHistory.average().roundToInt()
+            } else fallback
+        }
+    }
+
+    private fun calculateMinFps(fallback: Int): Int {
+        synchronized(fpsHistory) {
+            return if (sessionMinFps < 240) sessionMinFps else fallback
         }
     }
 
@@ -119,25 +174,34 @@ object FpsMonitor {
                                 val elapsedSec = (now - lastGfxTimestamp) / 1000.0
                                 if (elapsedSec > 0.5) {
                                     val measuredFps = (deltaFrames / elapsedSec).roundToInt().coerceIn(0, 144)
+                                    val deltaJank = (jankyFrames - totalSampleJank).coerceAtLeast(0)
                                     val jankPercent = if (deltaFrames > 0) {
-                                        ((jankyFrames.toFloat() / deltaFrames.toFloat()) * 100f).coerceIn(0f, 100f)
+                                        ((deltaJank.toFloat() / deltaFrames.toFloat()) * 100f).coerceIn(0f, 100f)
                                     } else 0f
+                                    val stability = (100f - jankPercent).coerceIn(0f, 100f)
 
                                     val finalFps = if (measuredFps > 0) measuredFps else _fps.value
                                     val frameTime = if (finalFps > 0) 1000f / finalFps else 16.6f
 
+                                    recordFpsSample(finalFps, jankPercent)
+
                                     _fps.value = finalFps
                                     _frameTimeMs.value = frameTime
-                                    _fpsTelemetry.value = FpsTelemetry(
+                                    _fpsTelemetry.value = _fpsTelemetry.value.copy(
                                         currentFps = finalFps,
+                                        averageFps = calculateAverageFps(finalFps),
+                                        minFps = calculateMinFps(finalFps),
                                         frameTimeMs = frameTime,
                                         source = FpsSource.ROBLOX_SURFACE_GFXINFO,
                                         isRobloxActive = true,
-                                        jankyFramesPercent = jankPercent
+                                        isRobloxRunning = true,
+                                        jankyFramesPercent = jankPercent,
+                                        fpsStabilityPercent = stability
                                     )
                                 }
                             }
                             lastGfxFrames = totalFrames
+                            totalSampleJank = jankyFrames
                             lastGfxTimestamp = now
                         } else {
                             // Roblox not actively rendering or dumpsys unavailable
@@ -149,7 +213,7 @@ object FpsMonitor {
                             }
                         }
                     } catch (_: Exception) {
-                        // Handled
+                        // Handled safely
                     }
                 }
                 delay(1000L)
@@ -163,7 +227,7 @@ object FpsMonitor {
             Choreographer.getInstance().removeFrameCallback(frameCallback)
             gfxJob?.cancel()
             _fpsTelemetry.value = _fpsTelemetry.value.copy(
-                source = FpsSource.PAUSED,
+                source = FpsSource.UNAVAILABLE,
                 isRobloxActive = false
             )
         }

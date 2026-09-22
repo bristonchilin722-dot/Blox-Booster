@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -30,7 +31,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Tune
@@ -39,8 +39,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -57,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.BoostMode
 import com.example.data.model.BoostSettings
+import com.example.data.model.IntensityLevel
 import com.example.ui.theme.BackgroundDark
 import com.example.ui.theme.BorderSubtle
 import com.example.ui.theme.NeonAmber
@@ -65,14 +64,10 @@ import com.example.ui.theme.NeonGreen
 import com.example.ui.theme.NeonPurple
 import com.example.ui.theme.NeonRed
 import com.example.ui.theme.SurfaceCard
-import com.example.ui.theme.SurfaceCardLight
 import com.example.ui.theme.SurfaceDark
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
-
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.material.icons.filled.PowerSettingsNew
 
 @Composable
 fun FloatingPillHud(
@@ -93,8 +88,8 @@ fun FloatingPillHud(
 
     val modeColor = when (settings.activeMode) {
         BoostMode.POTATO -> NeonAmber
-        BoostMode.SHADERS -> NeonPurple
         BoostMode.BALANCED -> NeonCyan
+        BoostMode.PERFORMANCE -> NeonPurple
     }
 
     Box(
@@ -148,11 +143,7 @@ fun FloatingPillHud(
                 )
 
                 Text(
-                    text = when (settings.activeMode) {
-                        BoostMode.POTATO -> "POTATO"
-                        BoostMode.SHADERS -> "SHADERS"
-                        BoostMode.BALANCED -> "BALANCED"
-                    },
+                    text = settings.activeMode.title.uppercase(),
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontWeight = FontWeight.Bold,
                         color = modeColor,
@@ -198,9 +189,8 @@ fun FloatingSideGameMenu(
     onCloseCompletely: () -> Unit,
     onModeSelect: (BoostMode) -> Unit,
     onFpsCapSelect: (Int) -> Unit,
-    onBoostIntensityChange: (Float) -> Unit,
-    onPotatoIntensityChange: (Float) -> Unit,
-    onShadersIntensityChange: (Float) -> Unit,
+    onPotatoIntensityChange: (IntensityLevel) -> Unit,
+    onPerformanceIntensityChange: (IntensityLevel) -> Unit,
     onInstantBoost: () -> Unit,
     onSpeedCompile: () -> Unit,
     onResetResolution: () -> Unit,
@@ -244,7 +234,7 @@ fun FloatingSideGameMenu(
                         )
                     }
                     Text(
-                        text = "Made by Briston • Roblox Tuner",
+                        text = "Roblox Live Optimizer",
                         style = MaterialTheme.typography.labelSmall.copy(
                             color = NeonGreen,
                             fontWeight = FontWeight.Bold,
@@ -257,7 +247,6 @@ fun FloatingSideGameMenu(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    // Minimize to pill button
                     IconButton(
                         onClick = onClose,
                         modifier = Modifier.size(32.dp)
@@ -270,7 +259,6 @@ fun FloatingSideGameMenu(
                         )
                     }
 
-                    // Red Kill HUD button
                     Button(
                         onClick = onCloseCompletely,
                         modifier = Modifier
@@ -394,43 +382,40 @@ fun FloatingSideGameMenu(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    // Potato Mode Button
                     ModeButton(
                         title = "POTATO",
                         icon = Icons.Default.Speed,
                         isSelected = settings.activeMode == BoostMode.POTATO,
                         accentColor = NeonAmber,
-                        subtitle = "Downscale Res",
+                        subtitle = "Fill-Rate Cut",
                         onClick = { onModeSelect(BoostMode.POTATO) },
                         modifier = Modifier.weight(1f)
                     )
 
-                    // Shaders Mode Button
-                    ModeButton(
-                        title = "SHADERS",
-                        icon = Icons.Default.Palette,
-                        isSelected = settings.activeMode == BoostMode.SHADERS,
-                        accentColor = NeonPurple,
-                        subtitle = "4x MSAA / HDR",
-                        onClick = { onModeSelect(BoostMode.SHADERS) },
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    // Balanced Mode Button
                     ModeButton(
                         title = "BALANCED",
                         icon = Icons.Default.Bolt,
                         isSelected = settings.activeMode == BoostMode.BALANCED,
                         accentColor = NeonCyan,
-                        subtitle = "Native 60 FPS",
+                        subtitle = "Native 60Hz",
                         onClick = { onModeSelect(BoostMode.BALANCED) },
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    ModeButton(
+                        title = "PERFORMANCE",
+                        icon = Icons.Default.Tune,
+                        isSelected = settings.activeMode == BoostMode.PERFORMANCE,
+                        accentColor = NeonPurple,
+                        subtitle = "CPU Boost",
+                        onClick = { onModeSelect(BoostMode.PERFORMANCE) },
                         modifier = Modifier.weight(1f)
                     )
                 }
 
-                // Granular Scales
+                // Discrete Intensity Tuners
                 Text(
-                    text = "LIVE INTENSITY TUNERS",
+                    text = "LIVE INTENSITY LEVEL",
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontWeight = FontWeight.Black,
                         color = NeonCyan,
@@ -438,47 +423,25 @@ fun FloatingSideGameMenu(
                     )
                 )
 
-                // 1. Boost scale
-                SliderTile(
-                    title = "⚡ SYSTEM BOOST SCALE",
-                    value = settings.boostIntensity,
-                    onValueChange = onBoostIntensityChange,
-                    accentColor = NeonCyan,
-                    detail = "${settings.boostIntensity.toInt()}% aggressive RAM/CPU tuning"
+                // 1. Potato Mode Level
+                IntensityChipSelector(
+                    title = "🥔 POTATO RENDER SCALE",
+                    currentLevel = settings.potatoIntensity,
+                    onSelect = onPotatoIntensityChange,
+                    accentColor = NeonAmber
                 )
 
-                // 2. Potato Downscale scale
-                val potatoResDesc = when {
-                    settings.potatoIntensity >= 75f -> "50% Resolution (Ultra Potato / 3x FPS)"
-                    settings.potatoIntensity >= 45f -> "65% Resolution (High FPS Boost)"
-                    settings.potatoIntensity >= 20f -> "80% Resolution (Mild Lag Reduction)"
-                    else -> "Native Resolution"
-                }
-                SliderTile(
-                    title = "🥔 POTATO DOWNSCALE SCALE",
-                    value = settings.potatoIntensity,
-                    onValueChange = onPotatoIntensityChange,
-                    accentColor = NeonAmber,
-                    detail = potatoResDesc
+                // 2. Performance Mode Level
+                IntensityChipSelector(
+                    title = "🎮 PERFORMANCE CPU PRIORITY",
+                    currentLevel = settings.performanceIntensity,
+                    onSelect = onPerformanceIntensityChange,
+                    accentColor = NeonPurple
                 )
 
-                // 3. Shaders vibrance scale
-                val shadersDesc = when {
-                    settings.shadersIntensity >= 75f -> "Max MSAA + Vivid Dynamic HDR Shaders"
-                    settings.shadersIntensity >= 45f -> "4x MSAA + Enhanced Contrast & Bloom"
-                    else -> "Subtle 2x FXAA edge smoothing"
-                }
-                SliderTile(
-                    title = "✨ SHADERS VIBRANCE SCALE",
-                    value = settings.shadersIntensity,
-                    onValueChange = onShadersIntensityChange,
-                    accentColor = NeonPurple,
-                    detail = shadersDesc
-                )
-
-                // FPS Cap Selector
+                // Target FPS Cap Selector
                 Text(
-                    text = "TARGET FPS CAP",
+                    text = "TARGET DISPLAY FPS",
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontWeight = FontWeight.Black,
                         color = NeonCyan,
@@ -498,10 +461,11 @@ fun FloatingSideGameMenu(
 
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(RoundedCornerShape(6.dp))
                                 .background(if (isSelected) NeonCyan else SurfaceCard)
                                 .clickable { onFpsCapSelect(cap) }
-                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                            contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = label,
@@ -514,15 +478,39 @@ fun FloatingSideGameMenu(
                     }
                 }
 
-                // Quick ADB Tools
+                // Action Tools
                 Text(
-                    text = "PRIVILEGED QUICK TOOLS",
+                    text = "SYSTEM ENGINE ACTIONS",
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontWeight = FontWeight.Black,
                         color = NeonCyan,
                         fontSize = 10.sp
                     )
                 )
+
+                Button(
+                    onClick = onInstantBoost,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(38.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = NeonCyan),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Bolt,
+                        contentDescription = null,
+                        tint = BackgroundDark,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Instant Re-Apply Tweak",
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            color = BackgroundDark,
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
+                }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -532,12 +520,12 @@ fun FloatingSideGameMenu(
                         onClick = onSpeedCompile,
                         modifier = Modifier
                             .weight(1f)
-                            .height(38.dp),
+                            .height(34.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = SurfaceCard),
-                        shape = RoundedCornerShape(8.dp)
+                        shape = RoundedCornerShape(6.dp)
                     ) {
                         Text(
-                            text = "⚡ Compile DEX",
+                            text = "Compile DEX",
                             style = MaterialTheme.typography.labelSmall.copy(
                                 color = NeonCyan,
                                 fontWeight = FontWeight.Bold,
@@ -550,76 +538,27 @@ fun FloatingSideGameMenu(
                         onClick = onResetResolution,
                         modifier = Modifier
                             .weight(1f)
-                            .height(38.dp),
+                            .height(34.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = SurfaceCard),
-                        shape = RoundedCornerShape(8.dp)
+                        shape = RoundedCornerShape(6.dp)
                     ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = null,
+                            tint = NeonAmber,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "🖥️ Reset Res",
+                            text = "Reset Res",
                             style = MaterialTheme.typography.labelSmall.copy(
-                                color = TextPrimary,
+                                color = NeonAmber,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 10.sp
                             )
                         )
                     }
                 }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Big Re-Boost Action
-            Button(
-                onClick = onInstantBoost,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(42.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = NeonGreen),
-                shape = RoundedCornerShape(10.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Bolt,
-                    contentDescription = null,
-                    tint = BackgroundDark,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = "Instant Boost & Free RAM",
-                    style = MaterialTheme.typography.labelMedium.copy(
-                        color = BackgroundDark,
-                        fontWeight = FontWeight.Black
-                    )
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Dedicated Close Completely Button
-            Button(
-                onClick = onCloseCompletely,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(42.dp)
-                    .testTag("menu_close_overlay_completely_button"),
-                colors = ButtonDefaults.buttonColors(containerColor = NeonRed.copy(alpha = 0.2f)),
-                border = androidx.compose.foundation.BorderStroke(1.dp, NeonRed),
-                shape = RoundedCornerShape(10.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = null,
-                    tint = NeonRed,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "Close Overlay Completely",
-                    style = MaterialTheme.typography.labelMedium.copy(
-                        color = NeonRed,
-                        fontWeight = FontWeight.Bold
-                    )
-                )
             }
         }
     }
@@ -628,113 +567,104 @@ fun FloatingSideGameMenu(
 @Composable
 private fun ModeButton(
     title: String,
-    subtitle: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     isSelected: Boolean,
     accentColor: Color,
+    subtitle: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
-            .background(if (isSelected) SurfaceCardLight else SurfaceCard)
+            .background(if (isSelected) SurfaceCard else SurfaceDark)
             .border(
                 1.5.dp,
                 if (isSelected) accentColor else BorderSubtle,
                 RoundedCornerShape(10.dp)
             )
             .clickable { onClick() }
-            .padding(vertical = 8.dp, horizontal = 4.dp),
+            .padding(8.dp),
         contentAlignment = Alignment.Center
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(3.dp)
+        ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (isSelected) accentColor else TextSecondary,
+                tint = if (isSelected) accentColor else TextMuted,
                 modifier = Modifier.size(18.dp)
             )
-            Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = title,
                 style = MaterialTheme.typography.labelSmall.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = if (isSelected) TextPrimary else TextSecondary,
+                    fontWeight = FontWeight.Black,
+                    color = if (isSelected) accentColor else TextPrimary,
                     fontSize = 10.sp
                 )
             )
             Text(
                 text = subtitle,
-                style = MaterialTheme.typography.bodySmall.copy(
-                    color = if (isSelected) accentColor else TextMuted,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    color = TextMuted,
                     fontSize = 8.sp
-                ),
-                maxLines = 1
+                )
             )
         }
     }
 }
 
 @Composable
-private fun SliderTile(
+private fun IntensityChipSelector(
     title: String,
-    value: Float,
-    onValueChange: (Float) -> Unit,
-    accentColor: Color,
-    detail: String
+    currentLevel: IntensityLevel,
+    onSelect: (IntensityLevel) -> Unit,
+    accentColor: Color
 ) {
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(8.dp))
             .background(SurfaceCard)
-            .padding(10.dp)
+            .border(1.dp, BorderSubtle, RoundedCornerShape(8.dp))
+            .padding(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Column {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary,
-                        fontSize = 10.sp
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = FontWeight.Bold,
+                color = accentColor,
+                fontSize = 10.sp
+            )
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            IntensityLevel.values().forEach { level ->
+                val isSelected = currentLevel == level
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(if (isSelected) accentColor else SurfaceDark)
+                        .clickable { onSelect(level) }
+                        .padding(vertical = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = level.title,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = if (isSelected) BackgroundDark else TextSecondary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 9.sp
+                        )
                     )
-                )
-                Text(
-                    text = "${value.toInt()}%",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.Black,
-                        color = accentColor,
-                        fontFamily = FontFamily.Monospace
-                    )
-                )
+                }
             }
-
-            Slider(
-                value = value,
-                onValueChange = onValueChange,
-                valueRange = 0f..100f,
-                steps = 19,
-                colors = SliderDefaults.colors(
-                    thumbColor = accentColor,
-                    activeTrackColor = accentColor,
-                    inactiveTrackColor = SurfaceCardLight
-                ),
-                modifier = Modifier.height(26.dp)
-            )
-
-            Text(
-                text = detail,
-                style = MaterialTheme.typography.bodySmall.copy(
-                    color = TextSecondary,
-                    fontSize = 9.sp
-                )
-            )
         }
     }
 }

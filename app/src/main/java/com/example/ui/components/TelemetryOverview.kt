@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Thermostat
 import androidx.compose.material.icons.filled.VideogameAsset
@@ -34,7 +35,10 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.FpsTelemetry
+import com.example.data.model.ShizukuStatus
 import com.example.data.model.SystemTelemetry
+import com.example.data.model.ThermalState
 import com.example.ui.theme.BorderSubtle
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
@@ -50,6 +54,8 @@ import com.example.ui.theme.TextSecondary
 @Composable
 fun TelemetryOverview(
     telemetry: SystemTelemetry,
+    fpsTelemetry: FpsTelemetry,
+    shizukuStatus: ShizukuStatus,
     targetFps: Int,
     modifier: Modifier = Modifier
 ) {
@@ -59,107 +65,119 @@ fun TelemetryOverview(
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // Top 2 Cards: RAM & FPS
+        // Top 2 Cards: Live FPS & RAM
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            // Live FPS Card
+            val fpsColor = when {
+                fpsTelemetry.currentFps >= 55 -> NeonGreen
+                fpsTelemetry.currentFps >= 30 -> NeonAmber
+                else -> NeonRed
+            }
+
+            val fpsProgress = (fpsTelemetry.currentFps / 120f).coerceIn(0f, 1f)
+
+            TelemetryTile(
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag("telemetry_fps_card"),
+                title = "FPS (${fpsTelemetry.source.labelBadge})",
+                value = "${fpsTelemetry.currentFps} FPS",
+                subtext = "Target: ${if (targetFps == 0) "MAX" else "$targetFps"} • ${fpsTelemetry.frameTimeMs.toInt()}ms",
+                caption = "${telemetry.refreshRate} Hz Display Pacing",
+                icon = Icons.Default.Speed,
+                accentColor = fpsColor,
+                progress = fpsProgress
+            )
+
             // RAM Card
             TelemetryTile(
                 modifier = Modifier
                     .weight(1f)
                     .testTag("telemetry_ram_card"),
-                title = "RAM USAGE",
+                title = "SYSTEM RAM (${telemetry.ramPercentage}%)",
                 value = "${telemetry.usedRamMb} MB",
-                subtext = "${telemetry.freeRamMb} MB Free",
-                caption = "Kernel Memory Compaction",
+                subtext = "${telemetry.freeRamMb} MB Available",
+                caption = if (telemetry.isLowMemory) "Memory Pressure Alert" else "Healthy Allocation",
                 icon = Icons.Default.Memory,
-                accentColor = if (telemetry.ramPercentage > 80) NeonAmber else NeonCyan,
+                accentColor = if (telemetry.ramPercentage > 85) NeonRed else if (telemetry.ramPercentage > 70) NeonAmber else NeonCyan,
                 progress = telemetry.ramPercentage / 100f
-            )
-
-            // FPS & Refresh Rate Card
-            val fpsDisplay = if (targetFps == 0) "Uncapped" else "$targetFps FPS"
-            TelemetryTile(
-                modifier = Modifier
-                    .weight(1f)
-                    .testTag("telemetry_fps_card"),
-                title = "FRAME TARGET",
-                value = fpsDisplay,
-                subtext = "${telemetry.refreshRate} Hz Display",
-                caption = "SurfaceFlinger VSync",
-                icon = Icons.Default.Speed,
-                accentColor = NeonPurple,
-                progress = if (targetFps == 0) 1f else (targetFps / 144f).coerceIn(0f, 1f)
             )
         }
 
-        // Bottom 2 Cards: Thermals & Roblox App
+        // Bottom 2 Cards: Thermals & Roblox Process
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             // Thermals Card
-            val tempColor = when {
-                telemetry.batteryTemp >= 46f -> NeonRed
-                telemetry.batteryTemp >= 42f -> NeonAmber
-                else -> NeonGreen
-            }
-            val thermalSubtitle = when {
-                telemetry.batteryTemp >= 46f -> "Throttling Alert"
-                telemetry.batteryTemp >= 42f -> "Elevated Temp"
-                else -> "Optimal (${telemetry.batteryLevel}%)"
+            val (tempColor, thermalLabel) = when (telemetry.thermalState) {
+                ThermalState.NORMAL -> Pair(NeonGreen, "Normal (${telemetry.batteryLevel}%)")
+                ThermalState.WARM -> Pair(NeonAmber, "Warm (${telemetry.batteryLevel}%)")
+                ThermalState.HIGH -> Pair(NeonAmber, "High Temp (${telemetry.batteryLevel}%)")
+                ThermalState.THERMALLY_LIMITED -> Pair(NeonRed, "Throttled (${telemetry.batteryLevel}%)")
             }
 
             TelemetryTile(
                 modifier = Modifier
                     .weight(1f)
                     .testTag("telemetry_thermal_card"),
-                title = "THERMALS",
+                title = "THERMAL STATE",
                 value = "%.1f °C".format(telemetry.batteryTemp),
-                subtext = thermalSubtitle,
+                subtext = thermalLabel,
                 caption = "Battery Sensor (BatteryManager)",
                 icon = Icons.Default.Thermostat,
                 accentColor = tempColor,
                 progress = (telemetry.batteryTemp / 50f).coerceIn(0f, 1f)
             )
 
-            // Roblox Status Card
+            // Roblox Process Status
+            val (robloxColor, robloxStatusText) = when {
+                telemetry.isRobloxRunning -> Pair(NeonGreen, "Active & Running")
+                telemetry.isRobloxInstalled -> Pair(NeonCyan, "Installed (Idle)")
+                else -> Pair(NeonAmber, "Not Installed")
+            }
+
             TelemetryTile(
                 modifier = Modifier
                     .weight(1f)
                     .testTag("telemetry_roblox_card"),
-                title = "ROBLOX ENGINE",
-                value = if (telemetry.isRobloxInstalled) "Detected" else "Ready",
+                title = "ROBLOX STATUS",
+                value = robloxStatusText,
                 subtext = telemetry.robloxPackageName ?: "com.roblox.client",
-                caption = "60 FPS Native Client Cap",
+                caption = if (telemetry.isRobloxRunning) "60 FPS Engine Process" else "Ready for launch",
                 icon = Icons.Default.VideogameAsset,
-                accentColor = if (telemetry.isRobloxInstalled) NeonGreen else NeonCyan,
-                progress = 1f
+                accentColor = robloxColor,
+                progress = if (telemetry.isRobloxRunning) 1f else 0.5f
             )
         }
     }
 }
 
 @Composable
-private fun TelemetryTile(
+fun TelemetryTile(
     title: String,
     value: String,
     subtext: String,
-    caption: String? = null,
+    caption: String,
     icon: ImageVector,
     accentColor: androidx.compose.ui.graphics.Color,
     progress: Float,
     modifier: Modifier = Modifier
 ) {
-    val animatedProgress by animateFloatAsState(targetValue = progress, label = "telemetry_progress")
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress,
+        label = "telemetry_progress"
+    )
 
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(16.dp))
             .background(SurfaceCard)
             .border(1.dp, BorderSubtle, RoundedCornerShape(16.dp))
-            .padding(12.dp)
+            .padding(14.dp)
     ) {
         Column {
             Row(
@@ -172,10 +190,10 @@ private fun TelemetryTile(
                     style = MaterialTheme.typography.labelSmall.copy(
                         color = TextMuted,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.5.sp
+                        letterSpacing = 0.8.sp,
+                        fontSize = 10.sp
                     )
                 )
-
                 Box(
                     modifier = Modifier
                         .size(28.dp)
@@ -192,39 +210,26 @@ private fun TelemetryTile(
                 }
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             Text(
                 text = value,
                 style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.ExtraBold,
-                    color = TextPrimary
+                    fontWeight = FontWeight.Black,
+                    color = TextPrimary,
+                    fontSize = 16.sp
                 )
             )
-
-            Spacer(modifier = Modifier.height(2.dp))
 
             Text(
                 text = subtext,
-                style = MaterialTheme.typography.bodySmall.copy(
+                style = MaterialTheme.typography.labelSmall.copy(
                     color = TextSecondary,
                     fontSize = 11.sp
-                ),
-                maxLines = 1
+                )
             )
 
-            if (caption != null) {
-                Text(
-                    text = caption,
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        color = TextMuted,
-                        fontSize = 9.sp
-                    ),
-                    maxLines = 1
-                )
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             LinearProgressIndicator(
                 progress = { animatedProgress },
@@ -233,7 +238,17 @@ private fun TelemetryTile(
                     .height(4.dp)
                     .clip(RoundedCornerShape(2.dp)),
                 color = accentColor,
-                trackColor = SurfaceDark,
+                trackColor = SurfaceDark
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = caption,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    color = TextMuted,
+                    fontSize = 9.sp
+                )
             )
         }
     }

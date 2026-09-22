@@ -10,19 +10,49 @@ enum class BoostMode(
         title = "Potato Mode",
         subtitle = "Hardware render downscale & zero animations for max FPS",
         badge = "MAX FPS",
-        description = "Reduces graphics workload by lowering game overlay render scale, disabling MSAA & window animations, and activating Android Game Mode Performance."
+        description = "Prioritizes maximum frame rate and stability on budget hardware. Lowers render target resolution scale via Android Game Overlay (0.50x–0.85x), eliminates window and transition animation overhead, and switches Android Game Mode to Performance."
     ),
     BALANCED(
         title = "Balanced Mode",
-        subtitle = "Native resolution with stable 60 FPS target & cool thermals",
+        subtitle = "Native 1:1 render scale with stable 60 FPS pacing & cool thermals",
         badge = "STABLE 60",
-        description = "Optimal balance between visual fidelity and battery efficiency. Uses 100% native render resolution, 60 FPS display pacing, and mild background process cleanup."
+        description = "Optimal balance between visual fidelity and battery longevity. Uses 100% native render resolution, standard 60 FPS display pacing, mild 0.5x responsive animations, and safe background process trimming."
     ),
-    SHADERS(
-        title = "Graphics & Clarity",
-        subtitle = "Hardware 4x MSAA anti-aliasing & SurfaceFlinger GPU composition",
-        badge = "HIGH CLARITY",
-        description = "Legitimate hardware-level visual enhancement: enables 4x Multi-Sample Anti-Aliasing (MSAA) at driver level and direct SurfaceFlinger GPU composition for sharper polygon edges."
+    PERFORMANCE(
+        title = "Performance Mode",
+        subtitle = "Full native resolution with elevated CPU priority & Game Mode",
+        badge = "MAX SMOOTH",
+        description = "Maintains 100% native resolution while maximizing CPU thread scheduling priority (renice -10/-20), activating Android Game Mode Performance, and locking the display refresh rate to eliminate frame drops without visual degradation."
+    )
+}
+
+enum class IntensityLevel(
+    val title: String,
+    val badge: String,
+    val description: String,
+    val downscaleFactor: Float, // For Potato Mode render scaling
+    val nicePriority: Int       // For Performance Mode CPU priority
+) {
+    LOW(
+        title = "Low",
+        badge = "MILD",
+        description = "Light optimization. 0.85x resolution in Potato Mode; standard CPU priority in Performance Mode.",
+        downscaleFactor = 0.85f,
+        nicePriority = 0
+    ),
+    MEDIUM(
+        title = "Medium",
+        badge = "RECOMMENDED",
+        description = "Balanced optimization. 0.70x resolution in Potato Mode; elevated nice -10 CPU priority in Performance Mode.",
+        downscaleFactor = 0.70f,
+        nicePriority = -10
+    ),
+    HIGH(
+        title = "High",
+        badge = "AGGRESSIVE",
+        description = "Maximum aggressive tuning. 0.50x resolution scale in Potato Mode; high nice -20 CPU priority & AOT speed compilation.",
+        downscaleFactor = 0.50f,
+        nicePriority = -20
     )
 }
 
@@ -48,57 +78,73 @@ enum class PlayStyle(
         title = "Obby & Parkour",
         description = "Tower of Hell, Speedrun 4 (Locked frames, zero input delay)",
         recommendedFps = 60,
-        recommendedMode = BoostMode.BALANCED
+        recommendedMode = BoostMode.PERFORMANCE
     ),
     BATTERY_SAVER(
         title = "Battery Saver",
         description = "Extended session, cool battery temperature",
         recommendedFps = 45,
-        recommendedMode = BoostMode.POTATO
+        recommendedMode = BoostMode.BALANCED
     ),
     CUSTOM(
         title = "Custom Tuner",
         description = "Fine-tuned manual hardware control",
         recommendedFps = 60,
-        recommendedMode = BoostMode.SHADERS
+        recommendedMode = BoostMode.PERFORMANCE
     )
 }
 
-enum class FpsSource(val displayName: String, val isDirectMeasurement: Boolean) {
-    ROBLOX_SURFACE_GFXINFO("Roblox Render Surface (Shizuku gfxinfo)", true),
-    DISPLAY_COMPOSITOR("Display VSync Compositor (Choreographer)", false),
-    PAUSED("Roblox Inactive / Overlay Idle", false)
+enum class FpsSource(
+    val displayName: String,
+    val labelBadge: String,
+    val isDirectMeasurement: Boolean
+) {
+    ROBLOX_SURFACE_GFXINFO("Roblox Render Surface (Shizuku gfxinfo)", "DIRECT MEASUREMENT", true),
+    DISPLAY_COMPOSITOR("Display VSync Compositor (Choreographer)", "SYSTEM ESTIMATE", false),
+    UNAVAILABLE("Roblox Inactive / Not Measurable", "UNAVAILABLE", false)
 }
 
 data class FpsTelemetry(
     val currentFps: Int = 60,
+    val averageFps: Int = 60,
+    val minFps: Int = 60,
     val frameTimeMs: Float = 16.6f,
     val source: FpsSource = FpsSource.DISPLAY_COMPOSITOR,
     val isRobloxActive: Boolean = false,
-    val jankyFramesPercent: Float = 0f
+    val isRobloxRunning: Boolean = false,
+    val jankyFramesPercent: Float = 0f,
+    val fpsStabilityPercent: Float = 100f,
+    val displayRefreshRate: Int = 60,
+    val targetFps: Int = 60
 )
 
 data class BoostSettings(
     val activeMode: BoostMode = BoostMode.BALANCED,
     val playStyle: PlayStyle = PlayStyle.COMPETITIVE_PVP,
     val fpsCap: Int = 60,
-    val boostIntensity: Float = 75f,      // 0..100% scale
-    val potatoIntensity: Float = 60f,    // 0..100% scale
-    val shadersIntensity: Float = 40f,   // 0..100% scale
+    val potatoIntensity: IntensityLevel = IntensityLevel.MEDIUM,
+    val performanceIntensity: IntensityLevel = IntensityLevel.MEDIUM,
     val killBackgroundApps: Boolean = true,
     val dropRamCaches: Boolean = true,
-    val forceGpuComposition: Boolean = true,
-    val disableAnimations: Boolean = true,
-    val limitPhantomProcesses: Boolean = true,
-    val lockMaxRefreshRate: Boolean = true
+    val lockMaxRefreshRate: Boolean = true,
+    val enableThermalProtection: Boolean = true
 )
+
+enum class ThermalState(val displayName: String, val isElevated: Boolean, val isThrottled: Boolean) {
+    NORMAL("Normal", false, false),
+    WARM("Warm", true, false),
+    HIGH("High", true, true),
+    THERMALLY_LIMITED("Thermally Limited", true, true)
+}
 
 data class ThermalTelemetry(
     val batteryTempCelsius: Float = 33.5f,
     val batteryLevel: Int = 85,
-    val thermalState: String = "Normal",
-    val isElevated: Boolean = false,
-    val sensorSource: String = "Battery Thermal Sensor (BatteryManager)"
+    val thermalState: ThermalState = ThermalState.NORMAL,
+    val thermalHeadroom: Float = 0.95f, // 0.0 to 1.0 (1.0 = full headroom, 0.0 = severe throttling)
+    val sensorSource: String = "Battery Thermal Sensor (BatteryManager)",
+    val apiSource: String = "PowerManager Thermal API",
+    val isThrottlingAlert: Boolean = false
 )
 
 data class DeviceSpecs(
@@ -125,13 +171,16 @@ data class SystemTelemetry(
     val usedRamMb: Long = 4200,
     val freeRamMb: Long = 1944,
     val ramPercentage: Int = 68,
+    val isLowMemory: Boolean = false,
     val refreshRate: Int = 60,
     val batteryTemp: Float = 33.5f,
     val batteryLevel: Int = 85,
     val cpuCores: Int = 8,
     val isRobloxInstalled: Boolean = true,
+    val isRobloxRunning: Boolean = false,
     val robloxPackageName: String? = "com.roblox.client",
-    val thermalState: String = "Normal",
+    val thermalState: ThermalState = ThermalState.NORMAL,
+    val thermalHeadroom: Float = 0.95f,
     val isThermalElevated: Boolean = false
 )
 
@@ -143,6 +192,69 @@ data class ShizukuStatus(
     val version: Int = 0,
     val uid: Int = -1,
     val statusMessage: String = "Checking Shizuku status..."
+)
+
+enum class OperationStatus {
+    SUCCESS,
+    UNSUPPORTED,
+    FAILED
+}
+
+data class BoostOperationResult(
+    val name: String,
+    val detail: String,
+    val status: OperationStatus
+)
+
+data class DiagnosticSnapshot(
+    val timeFormatted: String,
+    val cpuArch: String,
+    val cpuCores: Int,
+    val totalRamMb: Long,
+    val usedRamMb: Long,
+    val freeRamMb: Long,
+    val ramPercent: Int,
+    val batteryTemp: Float,
+    val refreshRate: Int,
+    val fps: Int,
+    val frameTimeMs: Float,
+    val thermalState: String,
+    val isRobloxRunning: Boolean
+)
+
+data class BoostDiagnosticReport(
+    val id: Long = System.currentTimeMillis(),
+    val timeFormatted: String,
+    val modeApplied: BoostMode,
+    val before: DiagnosticSnapshot,
+    val after: DiagnosticSnapshot?,
+    val operations: List<BoostOperationResult>
+)
+
+enum class CheckStatus {
+    PASS,
+    LIMITED,
+    UNSUPPORTED,
+    FAIL
+}
+
+data class SystemCheckItem(
+    val category: String,
+    val name: String,
+    val status: CheckStatus,
+    val details: String
+)
+
+data class PerformanceSession(
+    val id: Long = System.currentTimeMillis(),
+    val timestampFormatted: String,
+    val mode: BoostMode,
+    val averageFps: Int,
+    val minFps: Int,
+    val averageFrameTimeMs: Float,
+    val batteryTempPeak: Float,
+    val durationSeconds: Int,
+    val measurementSource: String
 )
 
 data class BoostLog(

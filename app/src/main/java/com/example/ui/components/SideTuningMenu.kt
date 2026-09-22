@@ -32,12 +32,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Button
@@ -47,8 +50,6 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -62,6 +63,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.BoostMode
 import com.example.data.model.BoostSettings
+import com.example.data.model.IntensityLevel
 import com.example.data.model.PlayStyle
 import com.example.ui.theme.BackgroundDark
 import com.example.ui.theme.BorderSubtle
@@ -85,17 +87,20 @@ fun SideTuningMenu(
     onModeSelect: (BoostMode) -> Unit,
     onPlayStyleSelect: (PlayStyle) -> Unit,
     onFpsCapSelect: (Int) -> Unit,
-    onBoostIntensityChange: (Float) -> Unit,
-    onPotatoIntensityChange: (Float) -> Unit,
-    onShadersIntensityChange: (Float) -> Unit,
-    onResetBoostIntensity: () -> Unit = {},
-    onResetPotatoIntensity: () -> Unit = {},
-    onResetShadersIntensity: () -> Unit = {},
+    onPotatoIntensityChange: (IntensityLevel) -> Unit,
+    onPerformanceIntensityChange: (IntensityLevel) -> Unit,
+    onResetPotatoIntensity: () -> Unit,
+    onResetPerformanceIntensity: () -> Unit,
+    onOpenDiagnostics: () -> Unit,
+    onOpenSystemCheck: () -> Unit,
+    onOpenHistory: () -> Unit,
+    onOpenVisualQualityInfo: () -> Unit,
+    onOpenDeviceInfo: () -> Unit,
+    onOpenRestoreDefaults: () -> Unit,
     onReboost: () -> Unit,
     onLaunchRoblox: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Backdrop overlay
     AnimatedVisibility(
         visible = isOpen,
         enter = fadeIn(),
@@ -112,7 +117,6 @@ fun SideTuningMenu(
         )
     }
 
-    // Side Drawer Sliding in from End
     AnimatedVisibility(
         visible = isOpen,
         enter = slideInHorizontally(initialOffsetX = { it }),
@@ -123,7 +127,7 @@ fun SideTuningMenu(
             modifier = Modifier
                 .fillMaxHeight()
                 .fillMaxWidth(0.92f)
-                .widthIn(max = 420.dp)
+                .widthIn(max = 430.dp)
                 .background(BackgroundDark)
                 .border(1.dp, NeonCyan.copy(alpha = 0.3f))
                 .testTag("side_tuning_drawer")
@@ -167,7 +171,7 @@ fun SideTuningMenu(
                                 )
                             )
                             Text(
-                                text = "Made by Briston • Verified Optimizations",
+                                text = "Verified Real Hardware Profiles",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = NeonCyan,
                                     fontWeight = FontWeight.Bold,
@@ -198,17 +202,17 @@ fun SideTuningMenu(
                     modifier = Modifier
                         .weight(1f)
                         .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    // 1. Mode Selector: Potato Mode vs Shaders vs Balanced
-                    SectionCard(title = "GAME MODE", subtitle = "Choose rendering profile") {
+                    // 1. Mode Selector: Potato vs Balanced vs Performance
+                    SectionCard(title = "OPTIMIZATION PROFILE", subtitle = "Legitimate hardware-level profiles") {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             BoostMode.values().forEach { mode ->
                                 val isSelected = settings.activeMode == mode
                                 val accentColor = when (mode) {
                                     BoostMode.POTATO -> NeonAmber
-                                    BoostMode.SHADERS -> NeonPurple
                                     BoostMode.BALANCED -> NeonCyan
+                                    BoostMode.PERFORMANCE -> NeonPurple
                                 }
 
                                 Row(
@@ -236,8 +240,8 @@ fun SideTuningMenu(
                                         Icon(
                                             imageVector = when (mode) {
                                                 BoostMode.POTATO -> Icons.Default.Speed
-                                                BoostMode.SHADERS -> Icons.Default.Palette
                                                 BoostMode.BALANCED -> Icons.Default.Bolt
+                                                BoostMode.PERFORMANCE -> Icons.Default.Tune
                                             },
                                             contentDescription = null,
                                             tint = accentColor,
@@ -288,8 +292,37 @@ fun SideTuningMenu(
                         }
                     }
 
-                    // 2. Play Style & Custom FPS Caps
-                    SectionCard(title = "PLAY STYLES & FPS CAP", subtitle = "Match Roblox game genres") {
+                    // 2. Discrete Intensity Controls
+                    SectionCard(title = "PROFILE INTENSITY LEVELS", subtitle = "Concrete, verified parameters") {
+                        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                            // Potato Mode Intensity Levels
+                            DiscreteIntensitySelector(
+                                title = "🥔 POTATO MODE RENDER SCALE",
+                                currentLevel = settings.potatoIntensity,
+                                onSelect = onPotatoIntensityChange,
+                                onReset = onResetPotatoIntensity,
+                                accentColor = NeonAmber,
+                                lowDesc = "0.85x render scale (Light fill-rate reduction)",
+                                medDesc = "0.70x render scale (~50% fill-rate reduction)",
+                                highDesc = "0.50x render scale (75% reduction for low-end GPUs)"
+                            )
+
+                            // Performance Mode Intensity Levels
+                            DiscreteIntensitySelector(
+                                title = "🎮 PERFORMANCE CPU PRIORITY",
+                                currentLevel = settings.performanceIntensity,
+                                onSelect = onPerformanceIntensityChange,
+                                onReset = onResetPerformanceIntensity,
+                                accentColor = NeonPurple,
+                                lowDesc = "Standard scheduling priority & 100% native resolution",
+                                medDesc = "Elevated CPU priority (nice -10) for Roblox main thread",
+                                highDesc = "Aggressive CPU priority (nice -20) & AOT speed compilation"
+                            )
+                        }
+                    }
+
+                    // 3. Play Styles & 60 FPS Target
+                    SectionCard(title = "PLAY STYLES & 60 FPS TARGET", subtitle = "Align display refresh to Roblox engine") {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             FlowRow(
                                 modifier = Modifier.fillMaxWidth(),
@@ -310,7 +343,7 @@ fun SideTuningMenu(
                                             )
                                         },
                                         colors = FilterChipDefaults.filterChipColors(
-                                            selectedContainerColor = NeonPurple.copy(alpha = 0.3f),
+                                            selectedContainerColor = NeonCyan.copy(alpha = 0.25f),
                                             selectedLabelColor = NeonCyan,
                                             containerColor = SurfaceCard,
                                             labelColor = TextSecondary
@@ -318,7 +351,7 @@ fun SideTuningMenu(
                                         border = FilterChipDefaults.filterChipBorder(
                                             enabled = true,
                                             selected = selected,
-                                            borderColor = if (selected) NeonPurple else BorderSubtle
+                                            borderColor = if (selected) NeonCyan else BorderSubtle
                                         ),
                                         modifier = Modifier.testTag("play_style_${style.name.lowercase()}")
                                     )
@@ -326,7 +359,7 @@ fun SideTuningMenu(
                             }
 
                             Text(
-                                text = "Selected Style: ${settings.playStyle.description}",
+                                text = "Selected: ${settings.playStyle.description}",
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     color = TextMuted,
                                     fontSize = 11.sp
@@ -336,15 +369,14 @@ fun SideTuningMenu(
                             Spacer(modifier = Modifier.height(2.dp))
 
                             Text(
-                                text = "Target Display Refresh & FPS Lock:",
+                                text = "Display Refresh Rate / FPS Target:",
                                 style = MaterialTheme.typography.labelMedium.copy(
                                     color = TextPrimary,
                                     fontWeight = FontWeight.SemiBold
                                 )
                             )
 
-                            // FPS Caps Row
-                            val fpsOptions = listOf(30, 45, 60, 90, 120, 144, 0)
+                            val fpsOptions = listOf(30, 45, 60, 90, 120, 0)
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -353,7 +385,7 @@ fun SideTuningMenu(
                             ) {
                                 fpsOptions.forEach { fps ->
                                     val isSelected = settings.fpsCap == fps
-                                    val label = if (fps == 0) "∞ MAX" else "$fps FPS"
+                                    val label = if (fps == 0) "UNCAPPED" else "$fps FPS"
 
                                     Box(
                                         modifier = Modifier
@@ -376,7 +408,7 @@ fun SideTuningMenu(
                             }
 
                             Text(
-                                text = "Note: Roblox mobile engine caps internally at 60 FPS. Setting 60 FPS locks Android display VSync for zero frame judder.",
+                                text = "Technical Note: Roblox mobile engine enforces an internal 60 FPS tick limit. Locking Android display refresh to 60Hz eliminates judder and micro-stutter.",
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     color = TextMuted,
                                     fontSize = 10.sp
@@ -385,73 +417,63 @@ fun SideTuningMenu(
                         }
                     }
 
-                    // 3. The 3 Verified Intensity Scales (Boost, Potato, Shaders)
-                    SectionCard(title = "INTENSITY SCALES & RESET", subtitle = "Fine-tune and verify hardware limits") {
-                        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                            // Scale 1: System Boost Scale
-                            IntensitySliderWithReset(
-                                title = "⚡ SYSTEM BOOST SCALE",
-                                value = settings.boostIntensity,
-                                onValueChange = onBoostIntensityChange,
-                                onReset = onResetBoostIntensity,
-                                accentColor = NeonCyan,
-                                description = getBoostScaleDescription(settings.boostIntensity),
-                                testTag = "boost_intensity_slider"
+                    // 4. Quick Tools & Diagnostics
+                    SectionCard(title = "DIAGNOSTICS & SYSTEM TOOLS", subtitle = "Inspect & verify device capabilities") {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            ToolButton(
+                                icon = Icons.Default.Assessment,
+                                title = "Boost Diagnostics",
+                                subtitle = "Before & after telemetry report",
+                                accent = NeonCyan,
+                                onClick = onOpenDiagnostics
                             )
 
-                            // Scale 2: Potato Mode Scale
-                            IntensitySliderWithReset(
-                                title = "🥔 POTATO MODE SCALE",
-                                value = settings.potatoIntensity,
-                                onValueChange = onPotatoIntensityChange,
-                                onReset = onResetPotatoIntensity,
-                                accentColor = NeonAmber,
-                                description = getPotatoScaleDescription(settings.potatoIntensity),
-                                testTag = "potato_intensity_slider"
+                            ToolButton(
+                                icon = Icons.Default.Science,
+                                title = "System Capability Check",
+                                subtitle = "Audit Shizuku, APIs & Poco C71 support",
+                                accent = NeonGreen,
+                                onClick = onOpenSystemCheck
                             )
 
-                            // Scale 3: Graphics & Shaders Scale
-                            IntensitySliderWithReset(
-                                title = "✨ GRAPHICS & CLARITY SCALE",
-                                value = settings.shadersIntensity,
-                                onValueChange = onShadersIntensityChange,
-                                onReset = onResetShadersIntensity,
-                                accentColor = NeonPurple,
-                                description = getShadersScaleDescription(settings.shadersIntensity),
-                                testTag = "shaders_intensity_slider"
+                            ToolButton(
+                                icon = Icons.Default.History,
+                                title = "Performance History",
+                                subtitle = "Compare past Roblox sessions",
+                                accent = NeonAmber,
+                                onClick = onOpenHistory
                             )
 
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(SurfaceCardLight.copy(alpha = 0.5f))
-                                    .padding(8.dp)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.Default.Info,
-                                        contentDescription = null,
-                                        tint = NeonCyan,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "Roblox engine does not support PC ReShade. Blox Booster applies 4x MSAA anti-aliasing & GPU SurfaceFlinger safely.",
-                                        style = MaterialTheme.typography.bodySmall.copy(
-                                            color = TextSecondary,
-                                            fontSize = 10.sp
-                                        )
-                                    )
-                                }
-                            }
+                            ToolButton(
+                                icon = Icons.Default.Palette,
+                                title = "Visual Quality Guide",
+                                subtitle = "In-game graphics & anti-cheat transparency",
+                                accent = NeonPurple,
+                                onClick = onOpenVisualQualityInfo
+                            )
+
+                            ToolButton(
+                                icon = Icons.Default.Info,
+                                title = "Device Specs",
+                                subtitle = "Inspect hardware specs and thermals",
+                                accent = TextSecondary,
+                                onClick = onOpenDeviceInfo
+                            )
+
+                            ToolButton(
+                                icon = Icons.Default.Refresh,
+                                title = "Restore Settings",
+                                subtitle = "Revert changes made by Blox Booster",
+                                accent = NeonRed,
+                                onClick = onOpenRestoreDefaults
+                            )
                         }
                     }
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Bottom Action Buttons
+                // Bottom Actions
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -486,27 +508,183 @@ fun SideTuningMenu(
                         modifier = Modifier
                             .weight(1f)
                             .height(44.dp)
-                            .testTag("side_menu_launch_button"),
-                        colors = ButtonDefaults.buttonColors(containerColor = NeonGreen),
+                            .testTag("drawer_launch_button"),
+                        colors = ButtonDefaults.buttonColors(containerColor = SurfaceCardLight),
                         shape = RoundedCornerShape(10.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.PlayArrow,
                             contentDescription = null,
-                            tint = SurfaceDark,
+                            tint = NeonGreen,
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = "Play Roblox",
                             style = MaterialTheme.typography.labelMedium.copy(
-                                color = SurfaceDark,
+                                color = TextPrimary,
                                 fontWeight = FontWeight.Bold
                             )
                         )
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun DiscreteIntensitySelector(
+    title: String,
+    currentLevel: IntensityLevel,
+    onSelect: (IntensityLevel) -> Unit,
+    onReset: () -> Unit,
+    accentColor: Color,
+    lowDesc: String,
+    medDesc: String,
+    highDesc: String
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(SurfaceDark)
+            .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    color = accentColor,
+                    letterSpacing = 0.5.sp
+                )
+            )
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(4.dp))
+                    .clickable { onReset() }
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = "Reset Level",
+                    tint = TextMuted,
+                    modifier = Modifier.size(12.dp)
+                )
+                Spacer(modifier = Modifier.width(2.dp))
+                Text(
+                    text = "RESET",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        color = TextMuted,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                )
+            }
+        }
+
+        // Discrete Level Chips
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            IntensityLevel.values().forEach { level ->
+                val isSelected = currentLevel == level
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(if (isSelected) accentColor else SurfaceCard)
+                        .clickable { onSelect(level) }
+                        .padding(vertical = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "${level.title} (${level.badge})",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = if (isSelected) BackgroundDark else TextSecondary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp
+                        )
+                    )
+                }
+            }
+        }
+
+        val activeDesc = when (currentLevel) {
+            IntensityLevel.LOW -> lowDesc
+            IntensityLevel.MEDIUM -> medDesc
+            IntensityLevel.HIGH -> highDesc
+        }
+
+        Text(
+            text = activeDesc,
+            style = MaterialTheme.typography.bodySmall.copy(
+                color = TextMuted,
+                fontSize = 10.sp,
+                lineHeight = 13.sp
+            )
+        )
+    }
+}
+
+@Composable
+private fun ToolButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    accent: Color,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(SurfaceDark)
+            .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
+            .clickable { onClick() }
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(accent.copy(alpha = 0.15f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = accent,
+                modifier = Modifier.size(16.dp)
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelMedium.copy(
+                    color = TextPrimary,
+                    fontWeight = FontWeight.SemiBold
+                )
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    color = TextMuted,
+                    fontSize = 10.sp
+                )
+            )
         }
     }
 }
@@ -520,136 +698,30 @@ private fun SectionCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(SurfaceDark)
-            .border(1.dp, BorderSubtle, RoundedCornerShape(16.dp))
-            .padding(14.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(SurfaceCard)
+            .border(1.dp, BorderSubtle, RoundedCornerShape(14.dp))
+            .padding(12.dp)
     ) {
-        Column {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontWeight = FontWeight.Black,
-                    color = NeonCyan,
-                    letterSpacing = 0.8.sp
-                )
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall.copy(
-                    color = TextMuted,
-                    fontSize = 11.sp
-                )
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            content()
-        }
-    }
-}
-
-@Composable
-private fun IntensitySliderWithReset(
-    title: String,
-    value: Float,
-    onValueChange: (Float) -> Unit,
-    onReset: () -> Unit,
-    accentColor: Color,
-    description: String,
-    testTag: String
-) {
-    Column {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary
-                )
-            )
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column {
                 Text(
-                    text = "${value.toInt()}%",
+                    text = title,
                     style = MaterialTheme.typography.labelMedium.copy(
                         fontWeight = FontWeight.Black,
-                        color = accentColor
+                        letterSpacing = 1.sp,
+                        color = TextPrimary
                     )
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(SurfaceCardLight)
-                        .clickable { onReset() }
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "Reset slider",
-                            tint = TextMuted,
-                            modifier = Modifier.size(12.dp)
-                        )
-                        Spacer(modifier = Modifier.width(2.dp))
-                        Text(
-                            text = "Reset",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 10.sp,
-                                color = TextMuted
-                            )
-                        )
-                    }
-                }
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        color = TextMuted,
+                        fontSize = 11.sp
+                    )
+                )
             }
+            content()
         }
-
-        Slider(
-            value = value,
-            onValueChange = onValueChange,
-            valueRange = 0f..100f,
-            steps = 19,
-            colors = SliderDefaults.colors(
-                thumbColor = accentColor,
-                activeTrackColor = accentColor,
-                inactiveTrackColor = SurfaceCardLight
-            ),
-            modifier = Modifier.testTag(testTag)
-        )
-
-        Text(
-            text = description,
-            style = MaterialTheme.typography.bodySmall.copy(
-                color = TextSecondary,
-                fontSize = 11.sp
-            )
-        )
-    }
-}
-
-private fun getBoostScaleDescription(intensity: Float): String {
-    return when {
-        intensity < 25f -> "Mild: Memory page cache trim & basic garbage collection"
-        intensity < 50f -> "Standard: am kill-all background tasks & max phantom processes: 8"
-        intensity < 75f -> "Aggressive: Max phantom processes: 4, CPU nice -10 priority"
-        else -> "Extreme Turbo: Max phantom processes: 2, CPU nice -20 priority & AOT speed compilation"
-    }
-}
-
-private fun getPotatoScaleDescription(intensity: Float): String {
-    return when {
-        intensity < 34f -> "Level 1: Disables window animations, disables 4x MSAA, Android Game Mode Performance"
-        intensity < 67f -> "Level 2: Level 1 + Game Overlay Downscale (0.7x target) & background task kill"
-        else -> "Level 3 Ultra Potato: Level 2 + Game Overlay Downscale (0.5x target) + AOT speed compile"
-    }
-}
-
-private fun getShadersScaleDescription(intensity: Float): String {
-    return when {
-        intensity < 34f -> "Native Crisp: 1:1 pixel rendering, standard driver compositing"
-        intensity < 67f -> "Enhanced Clarity: SurfaceFlinger direct GPU compositing & 2x MSAA"
-        else -> "High Fidelity: Force 4x MSAA hardware anti-aliasing + SurfaceFlinger direct GPU pipeline"
     }
 }

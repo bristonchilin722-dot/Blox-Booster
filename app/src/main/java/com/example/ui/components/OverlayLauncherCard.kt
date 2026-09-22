@@ -167,7 +167,7 @@ fun OverlayLauncherCard(
                         )
                     )
                     Text(
-                        text = "Appears over Roblox so you can tweak Potato Mode, Shaders & FPS caps while playing.",
+                        text = "Appears over Roblox so you can tweak Potato Mode, Performance Mode & 60 FPS pacing while playing.",
                         style = MaterialTheme.typography.bodySmall.copy(
                             color = TextSecondary,
                             fontSize = 11.sp

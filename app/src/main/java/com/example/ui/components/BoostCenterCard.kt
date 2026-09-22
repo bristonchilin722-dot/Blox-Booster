@@ -98,8 +98,14 @@ fun BoostCenterCard(
 
     val modeColor = when (settings.activeMode) {
         BoostMode.POTATO -> NeonAmber
-        BoostMode.SHADERS -> NeonPurple
         BoostMode.BALANCED -> NeonCyan
+        BoostMode.PERFORMANCE -> NeonPurple
+    }
+
+    val modeIntensityText = when (settings.activeMode) {
+        BoostMode.POTATO -> "${settings.potatoIntensity.title.uppercase()} (${(settings.potatoIntensity.downscaleFactor * 100).toInt()}%)"
+        BoostMode.PERFORMANCE -> "${settings.performanceIntensity.title.uppercase()} (${settings.performanceIntensity.nicePriority})"
+        BoostMode.BALANCED -> "100% NATIVE"
     }
 
     Box(
@@ -148,7 +154,7 @@ fun BoostCenterCard(
                             .background(modeColor)
                     )
                     Text(
-                        text = "${settings.activeMode.title.uppercase()} • ${settings.boostIntensity.toInt()}% INTENSITY",
+                        text = "${settings.activeMode.title.uppercase()} • $modeIntensityText",
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = FontWeight.Bold,
                             color = modeColor,
