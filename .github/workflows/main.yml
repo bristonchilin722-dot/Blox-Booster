@@ -16,6 +16,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          # Optional: If you want GitHub to build a specific older commit 
+          # that worked before the AI broke it, put its hash here. 
+          # Leave commented out if you fixed it or want to use main.
+          # ref: 'YOUR_WORKING_COMMIT_HASH'
 
       - name: Set up JDK 17
         uses: actions/setup-java@v5
